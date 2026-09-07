@@ -5,6 +5,22 @@
 
 ## 설치
 
+**Windows** — `scripts\setup.bat` 을 더블클릭하면 가상환경·패키지·`.env` 까지 한 번에 만든다.
+직접 치려면:
+
+```bat
+python -m venv .venv
+.venv\Scripts\activate
+pip install -r requirements.txt
+copy .env.example .env
+notepad .env
+```
+
+> 메모장으로 `.env` 를 저장할 때 파일 형식을 **"모든 파일"** 로 두어야 한다.
+> 안 그러면 `.env.txt` 로 저장돼서 키를 못 읽는다. (그 경우 프로그램이 알아서 알려준다.)
+
+**macOS / Linux**
+
 ```bash
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
@@ -28,7 +44,8 @@ python -m sim_diamond.collect_bench     # 2) 벤치마크 표본 (기본 SILVER/
 python -m sim_diamond.report            # 3) data/report_YYYYMMDD.md
 ```
 
-`scripts/*.sh` 는 위 명령의 얇은 래퍼다 (`scripts/run_all.sh` 로 한 번에).
+`scripts/` 에 같은 명령의 얇은 래퍼가 있다 — Windows 는 `.bat`(`setup.bat`, `collect_me.bat`,
+`collect_bench.bat`, `report.bat`, `selftest.bat`), macOS/Linux 는 `.sh`(`run_all.sh` 로 한 번에).
 
 자주 쓰는 인자
 
@@ -44,7 +61,7 @@ python -m sim_diamond.report --out data/여기에.md
 합성 Riot 응답으로 파싱 → 지표 → 리포트 전 구간을 돌린다. API 키가 없어도 된다.
 
 ```bash
-python tests/test_pipeline.py           # 또는 scripts/selftest.sh
+python tests/test_pipeline.py    # Windows: scripts\selftest.bat / macOS·Linux: scripts/selftest.sh
 ```
 
 `data/report_SAMPLE.md` 가 이 합성 데이터로 만든 리포트다 (숫자는 전부 가짜).
