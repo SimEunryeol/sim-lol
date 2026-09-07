@@ -257,6 +257,10 @@ def init_db(conn: sqlite3.Connection) -> None:
 def _cleanup_legacy(conn: sqlite3.Connection) -> None:
     """예전 버전이 matches_raw 에 잘못 넣은 replays 탐색 결과를 치운다."""
     conn.execute("DELETE FROM matches_raw WHERE match_id LIKE '\_\_replays\_probe\_\_%' ESCAPE '\\'")
+    # 참가자가 하나도 없는 매치 행은 쓸모가 없다(껍데기 응답). 원본은 matches_raw 에 남는다.
+    conn.execute(
+        "DELETE FROM matches WHERE match_id NOT IN (SELECT match_id FROM participants)"
+    )
 
 
 def _migrate_metrics(conn: sqlite3.Connection) -> list[str]:

@@ -84,7 +84,7 @@ def all_match_ids(client: RiotClient, puuid: str, start_time_s: int, queue: int 
 def fetch_matches(client: RiotClient, conn, match_ids: list[str], with_timeline: bool = True,
                   label: str = "매치") -> dict[str, int]:
     total = len(match_ids)
-    stats = {"new_match": 0, "new_timeline": 0, "cached": 0, "failed": 0}
+    stats = {"new_match": 0, "new_timeline": 0, "cached": 0, "failed": 0, "empty": 0}
     t0 = time.time()
     for i, mid in enumerate(match_ids, 1):
         try:
@@ -95,7 +95,10 @@ def fetch_matches(client: RiotClient, conn, match_ids: list[str], with_timeline:
                 raw = client.match(mid)
                 save_raw(conn, "matches_raw", mid, raw)
                 stats["new_match"] += 1
-            parse.store_match(conn, raw)
+            if parse.store_match(conn, raw) is None:
+                stats["empty"] = stats.get("empty", 0) + 1
+                print(f"  · {mid} 는 참가자가 없는 껍데기 응답입니다 (시작되지 않은 게임). 건너뜁니다.")
+                continue
 
             if with_timeline:
                 if has_raw(conn, "timelines_raw", mid):

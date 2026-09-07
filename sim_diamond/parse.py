@@ -154,8 +154,12 @@ def parse_timeline(timeline: dict, match_id: str) -> tuple[list[dict], list[dict
 
 
 # --------------------------------------------------------------- 저장 --
-def store_match(conn: sqlite3.Connection, raw: dict) -> str:
+def store_match(conn: sqlite3.Connection, raw: dict) -> str | None:
+    """참가자가 없는 껍데기 응답(시작되지 않은 게임: queueId 0, duration 0)은 저장하지 않는다.
+    원본은 matches_raw 에 남아 있으므로 나중에 다시 볼 수 있다."""
     match_row, participants = parse_match(raw)
+    if not participants:
+        return None
     upsert(conn, "matches", match_row, ["match_id"])
     upsert_many(conn, "participants", participants, ["match_id", "puuid"])
     return match_row["match_id"]
@@ -178,11 +182,13 @@ def reparse_all(conn: sqlite3.Connection, match_ids: Iterable[str] | None = None
     """raw 테이블만 보고 matches/participants/frames/events 를 통째로 재생성."""
     if match_ids is None:
         match_ids = [r["match_id"] for r in conn.execute("SELECT match_id FROM matches_raw")]
-    n_m = n_t = 0
+    n_m = n_t = n_empty = 0
     for mid in match_ids:
         raw = load_raw(conn, "matches_raw", mid)
         if isinstance(raw, dict) and "info" in raw and "participants" in raw["info"]:
-            store_match(conn, raw)
+            if store_match(conn, raw) is None:
+                n_empty += 1
+                continue
             n_m += 1
         elif raw is not None:
             print(f"  ! {mid} 는 매치 JSON 이 아니라 건너뜁니다")
@@ -192,4 +198,4 @@ def reparse_all(conn: sqlite3.Connection, match_ids: Iterable[str] | None = None
             store_timeline(conn, tl, mid)
             n_t += 1
     conn.commit()
-    return {"matches": n_m, "timelines": n_t}
+    return {"matches": n_m, "timelines": n_t, "empty": n_empty}

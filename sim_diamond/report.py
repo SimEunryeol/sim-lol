@@ -212,50 +212,83 @@ def s_champions(me: pd.DataFrame, static: Static) -> str:
     return table(["챔피언", "판수", "승률", "KDA", "판당 데스", "15분 골드 차이"], rows)
 
 
-def s_deaths(deaths: pd.DataFrame, me_metrics: pd.DataFrame) -> str:
+DEATH_BUCKETS = [(0, 5, "0-5"), (5, 10, "5-10"), (10, 15, "10-15"),
+                 (15, 20, "15-20"), (20, 25, "20-25"), (25, 10 ** 6, "25+")]
+
+
+def _bucket(minute: float) -> str:
+    for lo, hi, label in DEATH_BUCKETS:
+        if lo <= minute < hi:
+            return label
+    return DEATH_BUCKETS[-1][2]
+
+
+def s_deaths(deaths: pd.DataFrame, me_metrics: pd.DataFrame, metrics: pd.DataFrame,
+             tiers: list[str]) -> str:
     mine = deaths[deaths["p_is_me"] == 1]
     if mine.empty:
         return "_데이터 없음_\n"
     out = []
     total = len(mine)
+    n_games = max(1, len(me_metrics))
 
-    buckets = ["0-5", "5-10", "10-15", "15-20", "20-25", "25+"]
-    def bucket(m):
-        for lo, hi, label in zip([0, 5, 10, 15, 20, 25], [5, 10, 15, 20, 25, 10**6], buckets):
-            if lo <= m < hi:
-                return label
-        return buckets[-1]
-    counts = Counter(mine["minute"].map(bucket))
-    out.append("**시간대별 데스 분포**\n")
-    out.append(
-        table(
-            ["구간(분)", "데스", "비율", "판당"],
-            [[b, counts.get(b, 0), pct(counts.get(b, 0) / total),
-              fmt(counts.get(b, 0) / max(1, len(me_metrics)), 2)] for b in buckets],
-        )
-    )
+    # 티어별 데스와 판수. 데스 절대수는 표본이 달라 비교가 안 되므로 판당/비율로 본다.
+    bench: dict[str, tuple[pd.DataFrame, int]] = {}
+    for t in tiers:
+        d = deaths[(deaths["p_is_bench"] == 1) & (deaths["p_tier"] == t)]
+        g = int(((metrics["p_is_bench"] == 1) & (metrics["p_tier"] == t)).sum())
+        bench[t] = (d, max(1, g))
+
+    counts = Counter(mine["minute"].map(_bucket))
+    out.append("**시간대별 데스 (판당)**\n")
+    rows = []
+    for _, _, b in DEATH_BUCKETS:
+        n = counts.get(b, 0)
+        row = [b, n, pct(n / total), fmt(n / n_games, 2)]
+        for t in tiers:
+            d, g = bench[t]
+            row.append(fmt(sum(1 for m in d["minute"] if _bucket(m) == b) / g, 2))
+        rows.append(row)
+    out.append(table(["구간(분)", "데스", "비율", "나 판당"] + [f"{t} 판당" for t in tiers], rows))
 
     zone_counts = Counter(mine["zone"])
-    out.append("\n**구역별 데스 분포**\n")
-    out.append(
-        table(
-            ["구역", "데스", "비율"],
-            [[geo.zone_label(z), zone_counts[z], pct(zone_counts[z] / total)]
-             for z in geo.ZONE_ORDER if zone_counts.get(z)],
-        )
-    )
+    bench_zone = {t: Counter(d["zone"]) for t, (d, _) in bench.items()}
+    out.append("\n**구역별 데스 (비율)**\n")
+    rows = []
+    for z in geo.ZONE_ORDER:
+        if not zone_counts.get(z):
+            continue
+        row = [geo.zone_label(z), zone_counts[z], pct(zone_counts[z] / total)]
+        for t in tiers:
+            d, _ = bench[t]
+            row.append(pct(bench_zone[t][z] / len(d)) if len(d) else "—")
+        rows.append(row)
+    out.append(table(["구역", "데스", "비율"] + [f"{t}" for t in tiers], rows))
 
     judged = mine[mine["warded"].notna()]
     if len(judged):
         unwarded = int((judged["warded"] == 0).sum())
+        rows = [
+            ["시야 없이 죽은 비율 _(추정)_", pct(unwarded / len(judged))]
+            + [_unwarded_rate(bench[t][0]) for t in tiers],
+            ["판당 데스", fmt(total / n_games, 2)]
+            + [fmt(len(bench[t][0]) / bench[t][1], 2) for t in tiers],
+            ["15분 이전 데스(판당)", fmt((mine["minute"] < 15).sum() / n_games, 2)]
+            + [fmt((bench[t][0]["minute"] < 15).sum() / bench[t][1], 2) for t in tiers],
+        ]
+        out.append("\n**벤치마크 비교**\n")
+        out.append(table(["항목", "나"] + [f"{t} 벤치" for t in tiers], rows))
         out.append(
-            f"\n- 총 데스 **{total}회**, 그중 판정 가능한 **{len(judged)}회** 기준\n"
-            f"- 죽기 직전 60초 안에 반경 1500 내 아군 와드가 **없던** 데스 _(추정)_: "
-            f"**{unwarded}회 ({pct(unwarded / len(judged))})**\n"
-            f"- 15분 이전 데스: **{int((mine['minute'] < 15).sum())}회** "
-            f"(판당 {fmt((mine['minute'] < 15).sum() / max(1, len(me_metrics)), 2)})\n"
+            f"\n- 총 데스 **{total}회** / {n_games}판. 죽기 직전 60초 안에 반경 1500 내 아군 와드가 "
+            f"**없던** 데스 **{unwarded}회 ({pct(unwarded / len(judged))})** _(추정)_\n"
+            f"- 와드 좌표는 라이엇이 주지 않아 근사값이다. 절대 수치보다 **벤치와의 차이**를 봐야 한다.\n"
         )
     return "\n".join(out)
+
+
+def _unwarded_rate(d: pd.DataFrame) -> str:
+    judged = d[d["warded"].notna()]
+    return pct((judged["warded"] == 0).sum() / len(judged)) if len(judged) else "—"
 
 
 def s_jungle(me: pd.DataFrame, df: pd.DataFrame, tiers: list[str]) -> str:
@@ -360,7 +393,7 @@ def build(conn: sqlite3.Connection) -> str:
         f"\n## 3. 챔피언별 ({MIN_CHAMP_GAMES}판 이상)\n",
         s_champions(me, static),
         "\n## 4. 데스 패턴\n",
-        s_deaths(deaths, me),
+        s_deaths(deaths, me, metrics, bench_tiers),
     ]
     jungle = s_jungle(me, metrics, bench_tiers)
     if jungle:
