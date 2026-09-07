@@ -141,6 +141,28 @@ CREATE TABLE IF NOT EXISTS deaths_detail (
     PRIMARY KEY (match_id, puuid, seq)
 );
 
+-- 탐색/집중 단계. 단계마다 어떤 라인을 어떤 챔프로 몇 판 할지 정한다.
+CREATE TABLE IF NOT EXISTS phases (
+    phase_name  TEXT NOT NULL,
+    start_date  TEXT NOT NULL,   -- YYYY-MM-DD (KST). 이 날짜 00:00 KST 이후 경기가 대상
+    role        TEXT NOT NULL,   -- TOP / JUNGLE / MIDDLE / BOTTOM / UTILITY
+    champs      TEXT NOT NULL,   -- json 배열: 기준 챔프 이름(영문 championName)
+    target_games INTEGER NOT NULL DEFAULT 15,
+    end_date    TEXT,
+    created_at  TEXT,
+    PRIMARY KEY (phase_name, role)
+);
+
+-- 경기별 자기 평가(재미 점수). 지표만으로는 안 잡히는 걸 남긴다.
+CREATE TABLE IF NOT EXISTS self_rating (
+    match_id   TEXT NOT NULL,
+    puuid      TEXT NOT NULL,
+    score      INTEGER NOT NULL,   -- 1~5
+    memo       TEXT,
+    created_at TEXT,
+    PRIMARY KEY (match_id, puuid)
+);
+
 CREATE TABLE IF NOT EXISTS collect_state (
     key   TEXT PRIMARY KEY,
     value TEXT
@@ -201,8 +223,11 @@ METRIC_COLUMNS: list[tuple[str, str]] = [
     ("deaths_bucket_json", "TEXT"),
     # 오브젝트
     ("obj_team_total", "INTEGER"),
-    ("obj_participated", "INTEGER"),
-    ("obj_participation", "REAL"),
+    ("obj_participated", "INTEGER"),          # 기준 반경(1200) 기준
+    ("obj_participation", "REAL"),            # 기준 반경(1200) 기준
+    ("obj_participation_800", "REAL"),
+    ("obj_participation_1200", "REAL"),
+    ("obj_participation_2500", "REAL"),
     ("obj_detail_json", "TEXT"),
     # 정글 전용
     ("is_jungle", "INTEGER"),
@@ -357,6 +382,7 @@ def counts(conn: sqlite3.Connection) -> dict[str, int]:
     tables = [
         "players", "matches_raw", "timelines_raw", "matches", "participants",
         "frames", "events", "participant_metrics", "deaths_detail", "champion_mastery",
+        "phases", "self_rating",
     ]
     out = {}
     for t in tables:

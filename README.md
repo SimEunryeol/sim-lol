@@ -52,10 +52,50 @@ python -m sim_diamond.report            # 3) data/report_YYYYMMDD.md
 
 ```bash
 python -m sim_diamond.collect_me --limit 20          # 매치 수 제한(첫 시험용)
+python -m sim_diamond.collect_me --include-normals   # 일반(400/430)도 함께 수집
 python -m sim_diamond.collect_me --recompute         # 지표 전체 재계산
 python -m sim_diamond.collect_bench --tiers BRONZE SILVER GOLD --per-tier 15 --per-player 10
 python -m sim_diamond.report --out data/여기에.md
 ```
+
+## 탐색 단계 (5개 라인 전부 돌려보기)
+
+주 라인을 확정하지 않고 5개 라인을 각각 **기준 챔프 2개로 15판씩, 총 75판** 돌려보며
+어디가 맞는지 데이터로 고른다.
+
+```bat
+REM 1) 라인별 기준 챔프를 정하고 단계를 만든다 (영문 championName)
+python -m sim_diamond.phase init-explore ^
+  --top Garen Malphite --jungle Nocturne Rammus --middle Ahri Annie ^
+  --bottom Caitlyn Ashe --utility Thresh Leona
+
+REM 2) 경기가 끝날 때마다 재미 점수를 남긴다 (1~5)
+python -m sim_diamond.rate 4 "갱 각이 잘 보였다"
+
+REM 3) 수집하고 현황을 본다
+python -m sim_diamond.collect_me
+python -m sim_diamond.explore
+```
+
+`explore` 가 보여주는 것
+
+| 항목 | 뜻 |
+| --- | --- |
+| 진행 | 그 라인 판수 / 목표 15판 |
+| 기준 챔프 외 | 정해둔 챔프가 아닌 걸로 한 판수(위반) |
+| 재미 | `rate` 로 남긴 점수 평균 (1~5) |
+| 지표 | 낮은 티어 벤치 0%, 높은 티어 벤치 100% 축에서 내 위치 |
+| 적합도 | 지표 70% + 재미 30% |
+
+**지표를 왜 정규화하나**: 분당 CS(6.4)와 15분 골드 차이(-390)는 단위가 달라 그냥 더할 수
+없다. BRONZE 벤치를 0, GOLD 벤치를 1로 두면 "브론즈에서 골드까지 얼마나 왔나"라는 이
+프로젝트의 질문 그 자체가 축이 된다. 두 벤치가 사실상 같은 지표는 변별력이 없어 뺀다.
+BRONZE 를 안 모았으면 IRON→SILVER 처럼 있는 티어로 축을 잡는다.
+
+**75판을 채우기 전에는 라인을 결정하지 않는다.** 리포트와 `explore` 둘 다 남은 판수를
+명시하고, 2단계 코치 메모도 이 규칙을 지키도록 시스템 프롬프트에 박아둔다.
+
+`phase set-champs` 로 기준 챔프를 바꾸면 그 즉시 위반 집계가 다시 계산된다.
 
 ## 잘 안 될 때: 진단부터
 
@@ -118,7 +158,12 @@ sim_diamond/
   ddragon.py        챔피언/아이템 정적 데이터(ko_KR), 코어템 골드 판정
   collect_me.py     내 계정 수집 진입점
   collect_bench.py  벤치마크 표본 수집 진입점
+  phase.py          탐색/집중 단계 관리 (phases 테이블)
+  rate.py           경기별 재미 점수 기록 (self_rating 테이블)
+  explore.py        탐색 진행 현황 · 적합도 계산
   report.py         마크다운 리포트 생성
+  check.py          수집 데이터 점검
+  doctor.py         .env / API 키 진단
 data/               sim.db, 리포트
 scripts/            셸 래퍼
 tests/              합성 픽스처 + 전 구간 자체 검증
@@ -155,6 +200,8 @@ tests/              합성 픽스처 + 전 구간 자체 검증
 | `participant_metrics` | 계산된 지표 (아래) |
 | `deaths_detail` | 데스 1건 단위: 시각, 좌표, 구역, 와드 여부 |
 | `champion_mastery` | 숙련도 top 20 |
+| `phases` | 탐색/집중 단계: 단계명, 시작일, 라인, 기준 챔프(json), 목표 판수 |
+| `self_rating` | 경기별 재미 점수(1~5)와 메모 |
 | `static_data` | Data Dragon 캐시 |
 | `collect_state` | 수집 진행 상태 |
 
@@ -177,7 +224,7 @@ Riot 타임라인이 주지 않는 정보라 추정한 값이다. 리포트 하�
 | 항목 | 왜 근사인가 | 어떻게 |
 | --- | --- | --- |
 | 데스 시 아군 와드 유무 | `WARD_PLACED` 이벤트에 **좌표가 없다** | 설치자의 그 시각 위치로 대체. 위치는 분 단위 프레임 + 킬 이벤트의 정확 좌표를 선형보간 |
-| 오브젝트 참여 | 몬스터 처치 시점의 내 좌표가 없다 | 같은 선형보간. 단 처치자 본인·어시스트 기록자는 무조건 참여 |
+| 오브젝트 참여 | 몬스터 처치 시점의 내 좌표가 없다 | 처치 시각 ±30초 안에서 가장 가까웠던 거리로 판정. 기본 반경 **1200**(2500은 "근처에 있었다"가 "참여했다"로 뭉개진다). 리포트에 r800/r2500 도 함께 표시. 처치자 본인·어시스트 기록자는 무조건 참여 |
 | 첫 풀캠프 완료 | 캠프별 이벤트가 없다 | 정글 몬스터 처치 수가 20에 도달하는 시각을 프레임 사이 보간. 6캠프 전체가 두꺼비1+블루1+늑대3+칼날부리6+레드1+돌거북7 ≈ 20마리다 |
 | 귀환 횟수·시각 | 귀환 이벤트가 없다 | 상점 구매를 20초 간격으로 묶어 기지 방문으로 본다. 직전 방문 이후 죽은 적이 있으면 부활로 돌아온 것이라 자발적 귀환에서 뺀다 (`back_count` = 총 방문, `voluntary_back_count` = 자발적 귀환) |
 

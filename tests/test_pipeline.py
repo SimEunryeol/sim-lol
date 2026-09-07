@@ -35,7 +35,7 @@ def check(name: str, cond: bool, detail: str = "") -> None:
     print(f"  [{mark}] {name}{(' — ' + detail) if detail else ''}")
 
 
-def seed_db(conn, n_me: int = 24, n_bench_players: int = 6, n_bench_matches: int = 4) -> None:
+def seed_db(conn, n_me: int = 24, n_bench_matches: int = 4) -> None:
     _cache_put(conn, "ddragon_version", "15.18.1")
     _cache_put(conn, "champions", fixtures.DDRAGON_CHAMPIONS)
     _cache_put(conn, "items", fixtures.DDRAGON_ITEMS)
@@ -45,8 +45,9 @@ def seed_db(conn, n_me: int = 24, n_bench_players: int = 6, n_bench_matches: int
         "rank": "II", "lp": 42, "is_me": 1, "is_bench": 0, "fetched_at": now_iso(),
     }]
 
-    # 내 매치: 정글 위주(12판) + 미드/탑 섞기, 4개월에 걸쳐 분산
-    plan = [1] * 12 + [2] * 7 + [0] * 5
+    # 내 매치: 5개 라인 전부 (정글 11 / 미드 6 / 탑 3 / 원딜 2 / 서폿 2), 4개월에 분산.
+    # ROLE_SPEC 이 라인마다 다르므로 전 라인을 태워야 리포트 코드가 다 검증된다.
+    plan = [1] * 11 + [2] * 6 + [0] * 3 + [3] * 2 + [4] * 2
     for i in range(n_me):
         hero_index = plan[i % len(plan)]
         mid = f"KR_ME_{i:04d}"
@@ -58,11 +59,11 @@ def seed_db(conn, n_me: int = 24, n_bench_players: int = 6, n_bench_matches: int
         save_raw(conn, "matches_raw", mid, m)
         save_raw(conn, "timelines_raw", mid, t)
 
-    # 벤치: SILVER / GOLD 각 3명
+    # 벤치: BRONZE / SILVER / GOLD 각 5명(라인당 1명) — 라인별 벤치 슬라이스를 다 채운다
     b = 0
-    for tier in ("SILVER", "GOLD"):
-        for k in range(n_bench_players // 2):
-            hero_index = k % 5
+    for tier in ("BRONZE", "SILVER", "GOLD"):
+        for k in range(5):
+            hero_index = k
             pos = fixtures.POSITIONS[hero_index]
             puuid = f"BENCH_{tier}_{k}"
             players.append({
@@ -80,6 +81,12 @@ def seed_db(conn, n_me: int = 24, n_bench_players: int = 6, n_bench_matches: int
                 save_raw(conn, "timelines_raw", mid, t)
             b += 1
     upsert_many(conn, "players", players, ["puuid"])
+    upsert_many(conn, "champion_mastery", [
+        {"puuid": ME, "champion_id": 64, "champion_level": 7, "champion_points": 123456,
+         "last_play_time": 0, "fetched_at": now_iso()},
+        {"puuid": ME, "champion_id": 103, "champion_level": 5, "champion_points": 45678,
+         "last_play_time": 0, "fetched_at": now_iso()},
+    ], ["puuid", "champion_id"])
     conn.commit()
 
 
@@ -102,7 +109,7 @@ def main() -> int:
         print("[1] 합성 raw 데이터 적재")
         seed_db(conn)
         c = counts(conn)
-        check("raw 저장", c["matches_raw"] == 48, f"matches_raw={c['matches_raw']}")
+        check("raw 저장", c["matches_raw"] == 24 + 15 * 4, f"matches_raw={c['matches_raw']}")
 
         print("[2] raw → 파싱 (reparse_all)")
         res = parse.reparse_all(conn)
@@ -127,7 +134,8 @@ def main() -> int:
         mres = metrics.compute_all(conn, verbose=False)
         print(f"  {mres}")
         c = counts(conn)
-        check("participant_metrics 행", c["participant_metrics"] == 48, str(c["participant_metrics"]))
+        check("participant_metrics 행", c["participant_metrics"] == 24 + 15 * 4,
+              str(c["participant_metrics"]))
         check("deaths_detail 행 > 0", c["deaths_detail"] > 0, str(c["deaths_detail"]))
 
         m = dict(conn.execute(
@@ -162,9 +170,16 @@ def main() -> int:
               m["voluntary_back_count"] == 1 and json.loads(m["back_times_json"]) == [20.5],
               f"{m['voluntary_back_count']} {m['back_times_json']}")
         objd = json.loads(m["obj_detail_json"])
-        check("아군 오브젝트만 집계(4개)", m["obj_team_total"] == 4, json.dumps(objd, ensure_ascii=False))
-        check("드래곤 처치자=나 → 참여", objd.get("DRAGON", [0, 0])[1] == 1, json.dumps(objd, ensure_ascii=False))
+        check("아군 오브젝트만 집계(5개)", m["obj_team_total"] == 5, json.dumps(objd, ensure_ascii=False))
+        check("드래곤 2개 중 내가 딴 1개만 참여", objd.get("DRAGON", [0, 0]) == [2, 1],
+              json.dumps(objd, ensure_ascii=False))
         check("바론 원거리 → 미참여", objd.get("BARON_NASHOR", [1, 1])[1] == 0, json.dumps(objd, ensure_ascii=False))
+        # 10분 드래곤은 약 2000 떨어져 있다 → 800/1200 에서는 빠지고 2500 에서만 잡힌다
+        check("반경별 참여율이 갈린다",
+              m["obj_participation_800"] == 0.4 and m["obj_participation_1200"] == 0.4
+              and m["obj_participation_2500"] == 0.6,
+              f"800={m['obj_participation_800']} 1200={m['obj_participation_1200']} "
+              f"2500={m['obj_participation_2500']}")
 
         dz = json.loads(m["deaths_zone_json"])
         check("데스 구역 분류", dz.get("OWN_JUNGLE") == 1 and dz.get("MID") == 1
@@ -189,14 +204,71 @@ def main() -> int:
         after = counts(conn)
         check("멱등", before == after, f"{before} vs {after}")
 
-        print("[6] 리포트 생성")
+        print("[6] 탐색 단계 + 재미 점수 + explore")
+        from sim_diamond import explore, phase, rate  # noqa: E402
+        from sim_diamond.db import upsert as _up  # noqa: E402
+        champs_by_role = {"TOP": ["Garen"], "JUNGLE": ["LeeSin"], "MIDDLE": ["Ahri"],
+                          "BOTTOM": ["Jinx"], "UTILITY": ["Thresh"]}
+        for role, champs in champs_by_role.items():
+            phase.add_phase(conn, "탐색", role, champs, 15, "2026-01-01")
+        conn.commit()
+
+        recents = rate.recent_matches(conn, ME, limit=3)
+        check("최근 경기 조회", len(recents) == 3, str(len(recents)))
+        # 정글 경기 3판에만 점수를 준다 → 정글 평균 4.0, 다른 라인은 미기록
+        for i, score in enumerate((5, 4, 3)):
+            _up(conn, "self_rating", {"match_id": f"KR_ME_{i:04d}", "puuid": ME,
+                                      "score": score, "memo": f"메모{i}",
+                                      "created_at": now_iso()}, ["match_id", "puuid"])
+        conn.commit()
+
+        summ = explore.summarize(conn)
+        check("탐색 단계 인식", summ is not None and summ["phase_name"] == "탐색")
+        by_role = {r["role"]: r for r in summ["reports"]}
+        for role, r in by_role.items():
+            print(f"  {role:<8} 진행 {r['games']:>2}/{r['target']} 위반 {r['violations']} "
+                  f"재미 {r['fun_avg']} 지표 {r['metric_score']} 적합도 {r['fit']}")
+        check("5개 라인 전부 집계", len(summ["reports"]) == 5, str(len(summ["reports"])))
+        check("정글 11판", by_role["JUNGLE"]["games"] == 11, str(by_role["JUNGLE"]["games"]))
+        check("서폿 2판", by_role["UTILITY"]["games"] == 2, str(by_role["UTILITY"]["games"]))
+        check("기준 챔프 위반 0", all(r["violations"] == 0 for r in summ["reports"]),
+              str({k: v["violation_champs"] for k, v in by_role.items()}))
+        check("정글 재미 평균 4.0 (5,4,3)", by_role["JUNGLE"]["fun_avg"] == 4.0,
+              str(by_role["JUNGLE"]["fun_avg"]))
+        check("정글 재미 기록 3판", by_role["JUNGLE"]["fun_rated"] == 3,
+              str(by_role["JUNGLE"]["fun_rated"]))
+        check("미드는 재미 미기록", by_role["MIDDLE"]["fun_avg"] is None)
+        check("적합도 0~1", all(r["fit"] is None or 0 <= r["fit"] <= 1 for r in summ["reports"]))
+        check("목표 미달이면 complete=False", summ["complete"] is False,
+              f"{summ['done']}/{summ['target']}")
+
+        # 기준 챔프를 바꾸면 위반으로 잡히는지
+        phase.add_phase(conn, "탐색", "JUNGLE", ["Rammus"], 15, "2026-01-01")
+        conn.commit()
+        viol = next(r for r in explore.summarize(conn)["reports"] if r["role"] == "JUNGLE")
+        check("기준 챔프 외 플레이 = 위반으로 집계",
+              viol["violations"] == 11 and viol["violation_champs"] == ["LeeSin"],
+              f"{viol['violations']} {viol['violation_champs']}")
+        phase.add_phase(conn, "탐색", "JUNGLE", ["LeeSin"], 15, "2026-01-01")
+        conn.commit()
+
+        print("[7] 리포트 생성")
         text = report.build(conn)
         Path(args.report).parent.mkdir(parents=True, exist_ok=True)
         Path(args.report).write_text(text, encoding="utf-8")
         for heading in ("# 심은렬 다이아만들기 — 첫 진단 리포트", "## 1. 요약",
                         "## 2. 라인별 지표", "## 3. 챔피언별", "## 4. 데스 패턴",
-                        "## 5. 정글 전용", "## 6. 시간 흐름", "## 7. 코치 메모"):
+                        "## 5. 탐색 단계 진행 현황", "## 6. 시간 흐름", "## 7. 코치 메모"):
             check(f"섹션 {heading[:22]}", heading in text)
+        for lane in ("### 탑", "### 정글", "### 미드", "### 원딜", "### 서폿"):
+            check(f"라인 섹션 {lane}", lane in text)
+        check("정글 전용 지표 표", "**정글 전용 지표**" in text)
+        check("서폿 전용 지표 표", "**서폿 전용 지표**" in text)
+        check("표본 부족 표기", "표본 부족" in text)
+        check("숙련도 열", "숙련도 점수" in text)
+        check("숙련도 점수 값 표시", "123,456" in text)
+        check("탐색 진행률 표시", "진행 **" in text)
+        check("월별 라인 비율", "| 컨트롤 와드 |" in text)
         check("벤치 SILVER 열", "SILVER 벤치" in text)
         check("벤치 GOLD 열", "GOLD 벤치" in text)
         check("한글 챔피언 이름", "리 신" in text)

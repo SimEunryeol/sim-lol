@@ -13,7 +13,7 @@ from datetime import datetime
 
 import pandas as pd
 
-from . import config, geo
+from . import config, explore, geo
 from . import metrics as metrics_mod
 from .db import session
 from .ddragon import Static
@@ -23,8 +23,8 @@ POSITION_KO = {
     "UTILITY": "서폿", "": "미상", None: "미상",
 }
 POSITION_ORDER = ["TOP", "JUNGLE", "MIDDLE", "BOTTOM", "UTILITY"]
-MIN_CHAMP_GAMES = 5
-MIN_POSITION_GAMES = 10   # 이 미만이면 "표본 부족" 표시
+MIN_CHAMP_GAMES = 3       # 챔프 표에 올릴 최소 판수
+MIN_POSITION_GAMES = 15   # 이 미만이면 "표본 부족" (탐색 단계 목표와 같은 값)
 MIN_BENCH_GAMES = 20      # 벤치 열도 마찬가지
 SMALL = " ⚠"
 
@@ -94,21 +94,91 @@ def bench_slice(df: pd.DataFrame, tier: str, position: str | None = None) -> pd.
 
 
 def agg(df: pd.DataFrame) -> dict:
-    """리포트 2번에서 쓰는 라인 단위 집계."""
+    """라인 비교표가 쓰는 값 전부. 어떤 spec 이 와도 여기서 꺼내 쓴다."""
     if df.empty:
         return {}
-    return {
-        "games": len(df),
-        "winrate": df["win"].mean(),
-        "deaths": df["deaths"].mean(),
-        "cs15_diff": df["cs15_diff"].mean(),
-        "gold15_diff": df["gold15_diff"].mean(),
-        "cs_per_min": df["cs_per_min"].mean(),
-        "vision_per_min": df["vision_per_min"].mean(),
-        "obj_participation": df["obj_participation"].mean(),
-        "control_wards": df["control_wards_bought"].mean(),
-        "first_control_ward_min": df["first_control_ward_min"].mean(),
-    }
+    out = {"games": len(df), "winrate": df["win"].mean()}
+    for col in ("deaths", "kda", "cs", "cs_per_min", "cs10", "cs15",
+                "cs10_diff", "cs15_diff", "gold10_diff", "gold15_diff",
+                "level10_diff", "level15_diff", "vision_per_min", "wards_placed",
+                "wards_killed", "first_control_ward_min", "first_core_item_min",
+                "voluntary_back_count", "deaths_before_15", "damage_to_champs",
+                "obj_participation", "obj_participation_800", "obj_participation_1200",
+                "obj_participation_2500", "first_full_clear_min", "first_gank_min",
+                "first_counter_jungled_min", "jg_gold_diff_5", "jg_gold_diff_10",
+                "jg_level_diff_10", "enemy_jungle_minutes"):
+        if col in df.columns:
+            out[col] = df[col].mean()
+    out["control_wards"] = df["control_wards_bought"].mean()
+    # 실제로 일어난 판만 평균 내는 지표는 "일어난 비율"을 같이 봐야 한다
+    for col, key in (("first_gank_min", "gank_rate"),
+                     ("first_counter_jungled_min", "counter_jungled_rate"),
+                     ("first_control_ward_min", "control_ward_rate")):
+        if col in df.columns:
+            base = df[df["is_jungle"] == 1] if col != "first_control_ward_min" else df
+            out[key] = base[col].notna().mean() if len(base) else None
+    judged = (df["deaths_warded"].fillna(0) + df["deaths_unwarded"].fillna(0)).sum()
+    out["unwarded_rate"] = (df["deaths_unwarded"].fillna(0).sum() / judged) if judged else None
+    return out
+
+
+# 모든 라인에 공통으로 보는 지표
+COMMON_SPEC = [
+    ("games", "판수", lambda v: fmt(int(v), 0) if v else "—"),
+    ("winrate", "승률", pct),
+    ("deaths", "판당 데스", lambda v: fmt(v, 2)),
+    ("kda", "KDA", lambda v: fmt(v, 2)),
+    ("cs_per_min", "분당 CS", lambda v: fmt(v, 2)),
+    ("cs15_diff", "15분 CS 차이", lambda v: fmt(v, 1, plus=True)),
+    ("gold15_diff", "15분 골드 차이", lambda v: fmt(v, 0, plus=True)),
+    ("level15_diff", "15분 레벨 차이", lambda v: fmt(v, 2, plus=True)),
+    ("vision_per_min", "시야점수/분", lambda v: fmt(v, 3)),
+    ("control_wards", "컨트롤 와드 구매", lambda v: fmt(v, 1)),
+    ("control_ward_rate", "컨트롤 와드 산 판 비율", pct),
+    ("first_control_ward_min", "첫 컨트롤 와드(분)", lambda v: fmt(v, 1)),
+    ("first_core_item_min", "첫 코어템(분)", lambda v: fmt(v, 1)),
+    ("voluntary_back_count", "자발적 귀환", lambda v: fmt(v, 1)),
+    ("obj_participation", "오브젝트 참여율 r1200 _(추정)_", pct),
+]
+
+LANE_SPEC = [
+    ("cs10_diff", "10분 CS 차이", lambda v: fmt(v, 1, plus=True)),
+    ("gold10_diff", "10분 골드 차이", lambda v: fmt(v, 0, plus=True)),
+    ("level10_diff", "10분 레벨 차이", lambda v: fmt(v, 2, plus=True)),
+    ("deaths_before_15", "15분 이전 데스", lambda v: fmt(v, 2)),
+    ("unwarded_rate", "시야 없이 죽은 비율 _(추정)_", pct),
+    ("obj_participation_800", "오브젝트 참여율 r800 _(추정)_", pct),
+    ("obj_participation_2500", "오브젝트 참여율 r2500 _(추정)_", pct),
+]
+
+ROLE_SPEC = {
+    "JUNGLE": [
+        ("first_full_clear_min", "첫 풀캠프 완료(분) _(추정)_", lambda v: fmt(v, 2)),
+        ("first_gank_min", "첫 갱(분)", lambda v: fmt(v, 2)),
+        ("gank_rate", "갱 성사 판 비율", pct),
+        ("first_counter_jungled_min", "첫 카정 피해(분)", lambda v: fmt(v, 2)),
+        ("counter_jungled_rate", "카정 피해 판 비율", pct),
+        ("jg_gold_diff_5", "5분 정글 골드 차이", lambda v: fmt(v, 0, plus=True)),
+        ("jg_gold_diff_10", "10분 정글 골드 차이", lambda v: fmt(v, 0, plus=True)),
+        ("jg_level_diff_10", "10분 정글 레벨 차이", lambda v: fmt(v, 2, plus=True)),
+        ("enemy_jungle_minutes", "적정글 체류(분/판)", lambda v: fmt(v, 2)),
+        ("deaths_before_15", "15분 이전 데스", lambda v: fmt(v, 2)),
+        ("unwarded_rate", "시야 없이 죽은 비율 _(추정)_", pct),
+        ("obj_participation_800", "오브젝트 참여율 r800 _(추정)_", pct),
+        ("obj_participation_2500", "오브젝트 참여율 r2500 _(추정)_", pct),
+    ],
+    "UTILITY": [
+        ("wards_placed", "와드 설치", lambda v: fmt(v, 1)),
+        ("wards_killed", "와드 제거", lambda v: fmt(v, 1)),
+        ("deaths_before_15", "15분 이전 데스", lambda v: fmt(v, 2)),
+        ("unwarded_rate", "시야 없이 죽은 비율 _(추정)_", pct),
+        ("cs10_diff", "10분 CS 차이", lambda v: fmt(v, 1, plus=True)),
+        ("gold10_diff", "10분 골드 차이", lambda v: fmt(v, 0, plus=True)),
+        ("obj_participation_800", "오브젝트 참여율 r800 _(추정)_", pct),
+        ("obj_participation_2500", "오브젝트 참여율 r2500 _(추정)_", pct),
+    ],
+    "TOP": LANE_SPEC, "MIDDLE": LANE_SPEC, "BOTTOM": LANE_SPEC,
+}
 
 
 def cmp_rows(me: dict, benches: dict[str, dict], spec: list[tuple[str, str, callable]]) -> list[list[str]]:
@@ -155,45 +225,52 @@ def s_summary(me: pd.DataFrame, conn: sqlite3.Connection, bench_tiers: list[str]
 
 
 def s_positions(me: pd.DataFrame, df: pd.DataFrame, tiers: list[str]) -> str:
+    """라인마다 판수·승률·공통 지표·라인 전용 지표를 벤치와 나란히 놓는다."""
     if me.empty:
         return "_데이터 없음_\n"
-    out = ["**라인별 판수/승률**\n"]
+    out = ["**전체 라인 요약**\n"]
     rows = []
     for pos in POSITION_ORDER:
         sub = me[me["team_position"] == pos]
-        if sub.empty:
-            continue
-        rows.append([POSITION_KO[pos] + (SMALL if len(sub) < MIN_POSITION_GAMES else ""),
-                     len(sub), pct(sub["win"].mean()), fmt(sub["deaths"].mean(), 1)])
-    out.append(table(["라인", "판수", "승률", "판당 데스"], rows))
-    out.append(f"\n⚠ = {MIN_POSITION_GAMES}판 미만. 승률·평균이 크게 흔들리므로 참고만 한다.\n")
+        short = len(sub) < MIN_POSITION_GAMES
+        rows.append([
+            POSITION_KO[pos] + (SMALL if short else ""),
+            len(sub),
+            pct(sub["win"].mean()) if len(sub) else "—",
+            fmt(sub["deaths"].mean(), 1) if len(sub) else "—",
+            "표본 부족" if short else "",
+        ])
+    out.append(table(["라인", "판수", "승률", "판당 데스", "비고"], rows))
+    out.append(f"\n⚠ 표본 부족 = {MIN_POSITION_GAMES}판 미만. "
+               "승률·평균이 크게 흔들리므로 판단 근거로 쓰지 않는다.\n")
 
-    spec = [
-        ("games", "판수", lambda v: fmt(int(v), 0) if v else "—"),
-        ("winrate", "승률", pct),
-        ("deaths", "판당 데스", lambda v: fmt(v, 2)),
-        ("cs_per_min", "분당 CS", lambda v: fmt(v, 2)),
-        ("cs15_diff", "15분 CS 차이", lambda v: fmt(v, 1, plus=True)),
-        ("gold15_diff", "15분 골드 차이", lambda v: fmt(v, 0, plus=True)),
-        ("vision_per_min", "시야점수/분", lambda v: fmt(v, 3)),
-        ("control_wards", "컨트롤 와드 구매", lambda v: fmt(v, 1)),
-        ("first_control_ward_min", "첫 컨트롤 와드(분)", lambda v: fmt(v, 1)),
-        ("obj_participation", "오브젝트 참여율 _(추정)_", pct),
-    ]
     for pos in POSITION_ORDER:
         sub = me[me["team_position"] == pos]
+        short = len(sub) < MIN_POSITION_GAMES
+        head = f"\n### {POSITION_KO[pos]} — {len(sub)}판"
+        if len(sub):
+            head += f" · 승률 {pct(sub['win'].mean())}"
+        if short:
+            head += f"  ⚠ **표본 부족** ({len(sub)}/{MIN_POSITION_GAMES}판)"
+        out.append(head + "\n")
         if sub.empty:
+            out.append("_아직 이 라인 경기가 없다._\n")
             continue
-        note = (f"  ⚠ _표본 {len(sub)}판 — 참고만_" if len(sub) < MIN_POSITION_GAMES else "")
-        out.append(f"\n**{POSITION_KO[pos]} ({len(sub)}판)**{note}\n")
+
         slices = {t: bench_slice(df, t, pos) for t in tiers}
         benches = {t: agg(d) for t, d in slices.items()}
         counts = {t: len(d) for t, d in slices.items()}
-        out.append(table(cmp_headers(tiers, counts), cmp_rows(agg(sub), benches, spec)))
+        mine = agg(sub)
+        out.append("**공통 지표**\n")
+        out.append(table(cmp_headers(tiers, counts), cmp_rows(mine, benches, COMMON_SPEC)))
+        spec = ROLE_SPEC.get(pos)
+        if spec:
+            out.append(f"\n**{POSITION_KO[pos]} 전용 지표**\n")
+            out.append(table(cmp_headers(tiers, counts), cmp_rows(mine, benches, spec)))
     return "\n".join(out)
 
 
-def s_champions(me: pd.DataFrame, static: Static) -> str:
+def s_champions(me: pd.DataFrame, static: Static, mastery: dict[int, dict]) -> str:
     if me.empty:
         return "_데이터 없음_\n"
     rows = []
@@ -202,14 +279,31 @@ def s_champions(me: pd.DataFrame, static: Static) -> str:
             continue
         name = static.champion(cid, sub["champion_name"].iloc[0])
         kda = ((sub["kills"] + sub["assists"]) / sub["deaths"].clip(lower=1)).mean()
-        rows.append(
-            [name, len(sub), pct(sub["win"].mean()), fmt(kda), fmt(sub["deaths"].mean(), 1),
-             fmt(sub["gold15_diff"].mean(), 0, plus=True)]
-        )
-    rows.sort(key=lambda r: -r[1])
+        top_pos = sub["team_position"].mode()
+        pos = POSITION_KO.get(top_pos.iloc[0], "—") if len(top_pos) else "—"
+        m = mastery.get(int(cid)) or {}
+        pts = m.get("champion_points")
+        rows.append([
+            name, pos, len(sub), pct(sub["win"].mean()), fmt(kda),
+            fmt(sub["deaths"].mean(), 1), fmt(sub["gold15_diff"].mean(), 0, plus=True),
+            f"{pts:,}" if pts else "—",
+            m.get("champion_level") or "—",
+        ])
+    rows.sort(key=lambda r: -r[2])
     if not rows:
         return f"_{MIN_CHAMP_GAMES}판 이상 플레이한 챔피언이 없습니다._\n"
-    return table(["챔피언", "판수", "승률", "KDA", "판당 데스", "15분 골드 차이"], rows)
+    out = [table(["챔피언", "주 라인", "판수", "승률", "KDA", "판당 데스",
+                  "15분 골드 차이", "숙련도 점수", "숙련도 레벨"], rows)]
+    out.append(f"\n- {MIN_CHAMP_GAMES}판 이상 플레이한 챔피언 전부. 숙련도는 "
+               "Champion-Mastery-V4 상위 20개 기준이라 그 밖의 챔프는 `—` 로 나온다.\n")
+    return "\n".join(out)
+
+
+def load_mastery(conn: sqlite3.Connection) -> dict[int, dict]:
+    return {r["champion_id"]: dict(r) for r in conn.execute("""
+        SELECT cm.* FROM champion_mastery cm
+        JOIN players p ON p.puuid = cm.puuid WHERE p.is_me = 1
+    """)}
 
 
 DEATH_BUCKETS = [(0, 5, "0-5"), (5, 10, "5-10"), (10, 15, "10-15"),
@@ -291,47 +385,6 @@ def _unwarded_rate(d: pd.DataFrame) -> str:
     return pct((judged["warded"] == 0).sum() / len(judged)) if len(judged) else "—"
 
 
-def s_jungle(me: pd.DataFrame, df: pd.DataFrame, tiers: list[str]) -> str:
-    jg = me[me["is_jungle"] == 1]
-    if jg.empty:
-        return ""
-    spec = [
-        ("first_full_clear_min", "첫 풀캠프 완료(분) _(추정)_", lambda v: fmt(v, 2)),
-        ("first_gank_min", "첫 갱(분)", lambda v: fmt(v, 2)),
-        ("gank_rate", "갱 성사 판 비율", pct),
-        ("first_counter_jungled_min", "첫 카정 피해(분)", lambda v: fmt(v, 2)),
-        ("counter_jungled_rate", "카정 피해 판 비율", pct),
-        ("jg_gold_diff_5", "5분 정글 골드 차이", lambda v: fmt(v, 0, plus=True)),
-        ("jg_gold_diff_10", "10분 정글 골드 차이", lambda v: fmt(v, 0, plus=True)),
-        ("jg_level_diff_10", "10분 레벨 차이", lambda v: fmt(v, 2, plus=True)),
-        ("enemy_jungle_minutes", "적정글 체류(분/판)", lambda v: fmt(v, 2)),
-        ("obj_participation", "오브젝트 참여율 _(추정)_", pct),
-    ]
-
-    def jagg(d: pd.DataFrame) -> dict:
-        d = d[d["is_jungle"] == 1]
-        if d.empty:
-            return {}
-        # 첫 갱/첫 카정 평균은 "실제로 일어난 판"만 대상으로 한다(없는 판은 NaN).
-        out = {k: d[k].mean() for k, _, _ in spec if k in d.columns}
-        out["gank_rate"] = d["first_gank_min"].notna().mean()
-        out["counter_jungled_rate"] = d["first_counter_jungled_min"].notna().mean()
-        return out
-
-    body = [f"정글 **{len(jg)}판** · 승률 **{pct(jg['win'].mean())}**\n"]
-    jslices = {t: bench_slice(df, t) for t in tiers}
-    jcounts = {t: int((d["is_jungle"] == 1).sum()) for t, d in jslices.items()}
-    body.append(table(cmp_headers(tiers, jcounts),
-                      cmp_rows(jagg(jg), {t: jagg(d) for t, d in jslices.items()}, spec)))
-    body.append(
-        "\n- 첫 갱 = 3분 이후 **라인(탑/미드/봇)** 에서 내가 딴 첫 킬/어시. "
-        "정글·강에서 난 교전과 내 데스는 세지 않는다.\n"
-        "- 첫 카정 피해 = **내 정글에서 내가 죽은** 첫 시각(시간 하한 없음, 초반 인베이드 포함).\n"
-        "- 두 지표의 평균은 실제로 일어난 판만 대상이므로, 옆의 '판 비율'과 같이 봐야 한다.\n"
-    )
-    return "\n".join(body)
-
-
 def s_trend(me: pd.DataFrame) -> str:
     if me.empty or me["game_start"].isna().all():
         return "_데이터 없음_\n"
@@ -342,19 +395,28 @@ def s_trend(me: pd.DataFrame) -> str:
     )
     rows = []
     for month, sub in d.groupby("month"):
-        rows.append(
-            [month + (SMALL if len(sub) < MIN_POSITION_GAMES else ""),
-             len(sub), pct(sub["win"].mean()), fmt(sub["deaths"].mean(), 2),
-             fmt(sub["cs_per_min"].mean(), 2), fmt(sub["vision_per_min"].mean(), 3)]
-        )
-    return table(["월", "판수", "승률", "판당 데스", "분당 CS", "시야/분"], rows)
+        row = [month + (SMALL if len(sub) < MIN_POSITION_GAMES else ""), len(sub),
+               pct(sub["win"].mean()), fmt(sub["deaths"].mean(), 2),
+               fmt(sub["cs_per_min"].mean(), 2), fmt(sub["vision_per_min"].mean(), 3),
+               fmt(sub["control_wards_bought"].mean(), 1)]
+        for pos in POSITION_ORDER:
+            n = int((sub["team_position"] == pos).sum())
+            row.append(f"{n / len(sub) * 100:.0f}%" if n else "—")
+        rows.append(row)
+    headers = (["월", "판수", "승률", "판당 데스", "분당 CS", "시야/분", "컨트롤 와드"]
+               + [POSITION_KO[p] for p in POSITION_ORDER])
+    out = [table(headers, rows)]
+    out.append(f"\n- 오른쪽 5개 열은 그 달의 라인 비율(판수 기준). ⚠ = {MIN_POSITION_GAMES}판 미만.\n")
+    return "\n".join(out)
 
 
 def s_notes(static: Static) -> str:
     return (
         "- 와드 위치: 타임라인의 `WARD_PLACED` 이벤트에는 좌표가 없다. 설치자의 그 시각 위치"
         "(분 단위 프레임 + 킬 이벤트 좌표를 선형보간)로 **근사**한 값이다.\n"
-        "- 오브젝트 참여: 본인 좌표도 같은 방식의 근사값이며, 킬러 본인·어시스트 기록자는 무조건 참여로 본다.\n"
+        f"- 오브젝트 참여: 처치 시각 ±{metrics_mod.OBJECTIVE_WINDOW_MS // 1000}초 안에서 몬스터에 가장 "
+f"가까웠던 거리로 판정한다. 기본 반경 {int(metrics_mod.OBJECTIVE_RADIUS)}, 함께 표시하는 r800/r2500 은 "
+f"같은 계산의 반경만 바꾼 값이다. 본인 좌표도 근사값이며, 처치자 본인·어시스트 기록자는 무조건 참여로 본다.\n"
         f"- 첫 풀캠프: 정글 몬스터 처치 수가 {metrics_mod.FULL_CLEAR_JUNGLE_CS}마리"
         f"(6캠프 전체 분량)에 도달한 시각을 프레임 사이 선형보간으로 추정한다.\n"
         "- 귀환: 타임라인에 귀환 이벤트가 없어 상점 구매 묶음(간격 20초 초과 시 분리)을 기지 방문으로 본다. "
@@ -369,18 +431,20 @@ def s_notes(static: Static) -> str:
 def build(conn: sqlite3.Connection) -> str:
     metrics, deaths = load(conn)
     static = Static(conn)
+    mastery = load_mastery(conn)
+
     # 리메이크/조기종료는 모든 집계에서 뺀다(승률·판당 데스를 왜곡한다).
-    n_all = len(metrics)
     remakes = metrics[metrics["duration_s"].fillna(0) < config.REMAKE_MAX_S]
     n_my_remakes = int((remakes["p_is_me"] == 1).sum())
     metrics = metrics[metrics["duration_s"].fillna(0) >= config.REMAKE_MAX_S]
-    # 데스 상세도 같은 기준으로 걸러야 분자/분모가 맞는다.
     deaths = deaths[deaths["match_id"].isin(set(metrics["match_id"]))]
     me = metrics[metrics["p_is_me"] == 1].copy()
+
     bench_tiers = sort_tiers(
         t for t in metrics[metrics["p_is_bench"] == 1]["p_tier"].dropna().unique()
     )
     bench_desc = [f"{t} {len(bench_slice(metrics, t))}판" for t in bench_tiers]
+    explore_summary = explore.summarize(conn)
 
     today = datetime.now().strftime("%Y-%m-%d")
     parts = [
@@ -389,16 +453,14 @@ def build(conn: sqlite3.Connection) -> str:
         "\n## 1. 요약\n",
         s_summary(me, conn, bench_desc, n_my_remakes),
         "\n## 2. 라인별 지표 (벤치마크 비교)\n",
+        "5개 라인을 모두 탐색하는 중이다. 아직 주 라인을 확정하지 않았다.\n",
         s_positions(me, metrics, bench_tiers),
         f"\n## 3. 챔피언별 ({MIN_CHAMP_GAMES}판 이상)\n",
-        s_champions(me, static),
+        s_champions(me, static, mastery),
         "\n## 4. 데스 패턴\n",
         s_deaths(deaths, me, metrics, bench_tiers),
-    ]
-    jungle = s_jungle(me, metrics, bench_tiers)
-    if jungle:
-        parts += ["\n## 5. 정글 전용\n", jungle]
-    parts += [
+        "\n## 5. 탐색 단계 진행 현황\n",
+        explore.render_markdown(explore_summary),
         "\n## 6. 시간 흐름 (월별)\n",
         s_trend(me),
         "\n## 7. 코치 메모\n",

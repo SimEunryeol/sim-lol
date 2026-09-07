@@ -231,6 +231,12 @@ def make_match(
     if dur_min >= 22:
         add(22.0, {"type": "ELITE_MONSTER_KILL", "killerId": ally_ids[4], "monsterType": "BARON_NASHOR",
                    "position": _pos(*SPOT["BARON_PIT"]), "killerTeamId": hero["teamId"]})
+    # 10분 드래곤: 내 위치(내정글 3600,6200)에서 약 2000 떨어진 곳 →
+    # 반경 800/1200 에서는 미참여, 2500 에서는 참여로 갈려야 한다.
+    add(10.0, {"type": "ELITE_MONSTER_KILL", "killerId": ally_ids[3], "monsterType": "DRAGON",
+               "monsterSubType": "OCEAN_DRAGON", "position": _pos(5600, 6200),
+               "killerTeamId": hero["teamId"]})
+
     # 상대 팀 오브젝트(참여율 계산에서 제외돼야 한다)
     add(18.0, {"type": "ELITE_MONSTER_KILL", "killerId": enemy_ids[1], "monsterType": "DRAGON",
                "position": _pos(*SPOT["DRAGON_PIT"]),

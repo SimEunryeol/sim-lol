@@ -52,33 +52,35 @@ def fetch_me(client: RiotClient, conn, game_name: str, tag_line: str) -> dict:
             "game_name": acct.get("gameName", game_name), "tag_line": acct.get("tagLine", tag_line)}
 
 
-def all_match_ids(client: RiotClient, puuid: str, start_time_s: int, queue: int | None,
-                  page_size: int = 100, max_matches: int | None = None) -> list[str]:
+def all_match_ids(client: RiotClient, puuid: str, start_time_s: int,
+                  queues: list[int] | None, page_size: int = 100,
+                  max_matches: int | None = None) -> list[str]:
+    """Match-V5 의 queue 파라미터는 값을 하나만 받으므로 큐별로 나눠 부르고 합친다."""
     ids: list[str] = []
-    start = 0
-    while True:
-        want = page_size if not max_matches else min(page_size, max_matches - len(ids))
-        if want <= 0:
-            break
-        page = client.match_ids(puuid, start=start, count=want, queue=queue, start_time=start_time_s)
-        if not page:
-            break
-        ids.extend(page)
-        print(f"  매치 ID {len(ids)}개 수집…", flush=True)
-        if len(page) < want:
-            break
-        start += want
-        if max_matches and len(ids) >= max_matches:
-            break
-    if max_matches:
-        ids = ids[:max_matches]
+    for queue in (queues or [None]):
+        start = 0
+        while True:
+            want = page_size if not max_matches else min(page_size, max_matches - len(ids))
+            if want <= 0:
+                break
+            page = client.match_ids(puuid, start=start, count=want, queue=queue,
+                                    start_time=start_time_s)
+            if not page:
+                break
+            ids.extend(page)
+            print(f"  매치 ID {len(ids)}개 수집… (큐 {queue})", flush=True)
+            if len(page) < want:
+                break
+            start += want
+            if max_matches and len(ids) >= max_matches:
+                break
     # 중복 제거(순서 유지)
     seen, out = set(), []
     for m in ids:
         if m not in seen:
             seen.add(m)
             out.append(m)
-    return out
+    return out[:max_matches] if max_matches else out
 
 
 def fetch_matches(client: RiotClient, conn, match_ids: list[str], with_timeline: bool = True,
@@ -199,7 +201,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--no-metrics", action="store_true", help="지표 계산 생략")
     ap.add_argument("--no-replays-probe", action="store_true")
     ap.add_argument("--recompute", action="store_true", help="지표 전체 재계산")
-    ap.add_argument("--queue", type=int, default=config.SOLO_QUEUE_ID)
+    ap.add_argument("--queue", type=int, default=config.SOLO_QUEUE_ID, help="기본 솔랭(420)")
+    ap.add_argument("--include-normals", action="store_true",
+                    help=f"일반 게임도 수집 {config.NORMAL_QUEUE_IDS}")
     args = ap.parse_args(argv)
 
     st = config.load_settings()
@@ -216,8 +220,9 @@ def main(argv: list[str] | None = None) -> int:
         print(f"  {'버전 ' + str(stat.version) if ok and stat.available else '사용 불가 — 한글 이름/코어템 판정은 생략됩니다'}")
 
         since = st.season_start_kst
-        print(f"[3/6] {since:%Y-%m-%d %H:%M} KST 이후 큐 {args.queue} 매치 ID 조회")
-        ids = all_match_ids(client, me["puuid"], st.season_start_epoch_s, args.queue,
+        queues = [args.queue] + (list(config.NORMAL_QUEUE_IDS) if args.include_normals else [])
+        print(f"[3/6] {since:%Y-%m-%d %H:%M} KST 이후 큐 {queues} 매치 ID 조회")
+        ids = all_match_ids(client, me["puuid"], st.season_start_epoch_s, queues,
                             max_matches=args.limit)
         print(f"  총 {len(ids)}판")
         set_state(conn, "me_match_ids", ids)

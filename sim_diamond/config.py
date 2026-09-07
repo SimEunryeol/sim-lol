@@ -26,6 +26,7 @@ PLATFORM = "https://kr.api.riotgames.com"        # Summoner-V4, League-V4, Champ
 KST = timezone(timedelta(hours=9))
 
 SOLO_QUEUE_ID = 420
+NORMAL_QUEUE_IDS = (400, 430)   # 일반 드래프트 / 일반 블라인드
 # 이 시간 미만이면 리메이크/조기종료로 보고 집계에서 뺀다
 REMAKE_MAX_S = 300
 DEFAULT_SEASON_START_KST = "2026-01-01T00:00:00"

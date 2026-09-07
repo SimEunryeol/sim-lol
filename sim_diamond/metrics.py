@@ -20,7 +20,10 @@ from .ddragon import CONTROL_WARD_ID, Static
 
 WARD_LOOKBACK_MS = 60_000      # 데스 직전 이 시간 안에 설치된 아군 와드만 본다
 WARD_RADIUS = 1500.0
-OBJECTIVE_RADIUS = 2500.0
+# 오브젝트 참여 판정. 2500 은 너무 넓어 "근처에 있었다"가 "참여했다"로 뭉개진다.
+OBJECTIVE_RADII = (800.0, 1200.0, 2500.0)
+OBJECTIVE_RADIUS = 1200.0          # 리포트 기본값
+OBJECTIVE_WINDOW_MS = 30_000       # 처치 시각 ±30초 안의 위치 중 가장 가까운 값을 쓴다
 # 첫 풀캠프 완료 근사 기준(정글 몬스터 처치 수).
 # 6캠프 전체는 두꺼비1 + 블루1 + 늑대3 + 칼날부리6 + 레드1 + 돌거북7 ≈ 20마리다.
 # 12 로 두면 실측상 2분에 걸리는데(= 3~4캠프) 풀클리어는 3분 15초 이후다.
@@ -114,6 +117,27 @@ class MatchContext:
     def position_at(self, puuid: str, ts: int) -> tuple[float, float] | None:
         track = self.tracks.get(puuid)
         return track.at(ts) if track else None
+
+    def min_dist_in_window(self, puuid: str, ts: int, window_ms: int,
+                           point: tuple[float, float]) -> float | None:
+        """ts ± window_ms 안에서 그 사람이 point 에 가장 가까웠던 거리.
+
+        위치는 분 단위 프레임을 보간한 근사값이라, 한 시점만 보면 오차가 크다.
+        창 안의 실제 샘플 지점들과 창 양 끝을 함께 본다.
+        """
+        track = self.tracks.get(puuid)
+        if not track or not track.ts:
+            return None
+        times = {ts, ts - window_ms, ts + window_ms}
+        times |= {t for t in track.ts if ts - window_ms <= t <= ts + window_ms}
+        best = None
+        for t in sorted(times):
+            pos = track.at(t)
+            if pos is None:
+                continue
+            d = geo.dist(pos, point)
+            best = d if best is None else min(best, d)
+        return best
 
     def frame(self, puuid: str, minute: int) -> dict | None:
         return self.frames.get(puuid, {}).get(minute)
@@ -228,7 +252,8 @@ def _objectives(ctx: MatchContext, puuid: str) -> dict:
     me = ctx.parts[puuid]
     team = me["team_id"]
     detail: dict[str, list[int]] = defaultdict(lambda: [0, 0])
-    total = part = 0
+    total = 0
+    hits = {r: 0 for r in OBJECTIVE_RADII}
     for e in ctx.by_type.get("ELITE_MONSTER_KILL", []):
         killer = e["killer_puuid"]
         killer_team = ctx.team_of(killer) if killer else e["extra_d"].get("killerTeamId")
@@ -237,19 +262,26 @@ def _objectives(ctx: MatchContext, puuid: str) -> dict:
         mtype = e["monster_type"] or "UNKNOWN"
         total += 1
         detail[mtype][0] += 1
-        joined = killer == puuid or puuid in (e["extra_d"].get("assisting_puuids") or [])
-        if not joined and e["x"] is not None:
-            pos = ctx.position_at(puuid, e["ts_ms"] or 0)
-            joined = bool(pos and geo.dist(pos, (e["x"], e["y"])) <= OBJECTIVE_RADIUS)
-        if joined:
-            part += 1
+
+        credited = killer == puuid or puuid in (e["extra_d"].get("assisting_puuids") or [])
+        dist = None
+        if not credited and e["x"] is not None:
+            dist = ctx.min_dist_in_window(
+                puuid, e["ts_ms"] or 0, OBJECTIVE_WINDOW_MS, (e["x"], e["y"]))
+        for r in OBJECTIVE_RADII:
+            if credited or (dist is not None and dist <= r):
+                hits[r] += 1
+        if credited or (dist is not None and dist <= OBJECTIVE_RADIUS):
             detail[mtype][1] += 1
-    return {
+    out = {
         "obj_team_total": total,
-        "obj_participated": part,
-        "obj_participation": (part / total) if total else None,
+        "obj_participated": hits[OBJECTIVE_RADIUS],
+        "obj_participation": (hits[OBJECTIVE_RADIUS] / total) if total else None,
         "obj_detail_json": json.dumps({k: v for k, v in detail.items()}, ensure_ascii=False),
     }
+    for r in OBJECTIVE_RADII:
+        out[f"obj_participation_{int(r)}"] = (hits[r] / total) if total else None
+    return out
 
 
 def _jungle(ctx: MatchContext, puuid: str) -> dict:
