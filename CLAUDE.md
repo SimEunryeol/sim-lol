@@ -119,10 +119,11 @@ git pull
 
 ### 파이썬 실행 환경
 
-**`.venv` 를 쓰지 마라.** 저장소에 `.venv` 디렉터리가 있지만 안에 `pip` 밖에 없어서
-`python -m sim_diamond.doctor` 를 돌리면 `ModuleNotFoundError: No module named 'requests'`
-가 난다. 패키지는 **전역 Python 3.13.6** 에 깔려 있다. 그냥 `python -m sim_diamond....`
-로 실행해라.
+`.venv` 와 전역 Python 3.13.6 **둘 다** 패키지가 깔려 있다(2026-09-08 정리).
+`scripts\*.bat` 은 `.venv` 가 있으면 활성화하는데, 예전에는 `.venv` 가 비어 있어서
+더블클릭하면 전부 `ModuleNotFoundError: No module named 'requests'` 가 났다.
+`.venv\Scripts\python.exe -m pip install -r requirements.txt` 로 채워서 해결했다.
+**패키지를 새로 추가하면 두 곳 모두에 설치해라.**
 
 콘솔에 한글이 깨져 보이면 `set PYTHONIOENCODING=utf-8` 을 먼저 실행하면 된다.
 
@@ -154,6 +155,8 @@ sim_diamond/
   check.py          수집 데이터 점검
   doctor.py         .env / API 키 진단
   status.py         진단 결과를 logs/status.txt 로 모음
+  web.py            로컬 대시보드(FastAPI). 엔드포인트 5개
+  static/index.html 화면 4개(오늘/탐색/진단/코치). 빌드 없음, 외부 CDN 없음
 scripts/            .bat(Windows) / .sh 래퍼
 tests/              합성 픽스처 + 전 구간 검증 (네트워크 불필요)
 ```
@@ -174,6 +177,7 @@ python -m sim_diamond.rate 4 "메모"
 python -m sim_diamond.explore
 python -m sim_diamond.report
 python -m sim_diamond.coach [--dry-run] [--show]
+python -m sim_diamond.web           REM 대시보드 http://127.0.0.1:8765
 ```
 
 ---
@@ -261,8 +265,9 @@ r2500 에서만 잡히는 걸 검증한다.
    안 하는지 확인하고 어긋나면 `coach.SYSTEM_PROMPT` 를 조여라.
 4. 탐색 진행 — 경기마다 `python -m sim_diamond.rate <1-5> "메모"`,
    주기적으로 `collect_me` + `report` + `coach`
-5. **로컬 대시보드 UI** — FastAPI 5개 엔드포인트(`/today` `/explore` `/report` `/coach`
-   `/rate`) + 화면 4개(오늘/탐색/진단/코치). 아직 코드 0줄이고 `fastapi` 도 미설치다.
+5. ~~로컬 대시보드 UI~~ — **1차 완료.** `sim_diamond/web.py` + `static/index.html`.
+   엔드포인트 5개(`/today` `/explore` `/report` `/coach` `/rate`), 화면 4개.
+   `scripts\web.bat` 더블클릭. 챔프 이미지는 아직 플레이스홀더다(SPEC.md 참고).
 6. 75판 완료 후 라인 결정 → 집중 단계(`phase add`)
 7. (선택) 리플레이 파싱으로 와드 좌표 실측
 

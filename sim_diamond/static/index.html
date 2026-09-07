@@ -1,0 +1,377 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>sim-diamond 대시보드</title>
+<style>
+  :root{
+    --bg:#0e1116; --panel:#161b22; --panel2:#1c232c; --line:#2a323d;
+    --fg:#e6edf3; --dim:#8b98a5; --accent:#4b9fff; --good:#3fb950; --bad:#f85149;
+    --warn:#d29922;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--fg);
+       font:14px/1.6 "Malgun Gothic","맑은 고딕",system-ui,sans-serif}
+  header{display:flex;align-items:baseline;gap:12px;padding:14px 20px;
+         border-bottom:1px solid var(--line);background:var(--panel)}
+  header h1{font-size:16px;margin:0;font-weight:700}
+  header .who{color:var(--dim);font-size:13px}
+  nav{display:flex;gap:4px;padding:0 20px;background:var(--panel);
+      border-bottom:1px solid var(--line)}
+  nav button{background:none;border:0;border-bottom:2px solid transparent;color:var(--dim);
+             padding:10px 16px;font:inherit;cursor:pointer}
+  nav button.on{color:var(--fg);border-bottom-color:var(--accent)}
+  main{padding:20px;max-width:1100px}
+  section{display:none} section.on{display:block}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;
+        padding:16px;margin-bottom:16px}
+  .card h2{margin:0 0 12px;font-size:15px}
+  .muted{color:var(--dim)}
+  .err{color:var(--bad)}
+
+  /* 기준 챔프 카드 — 스플래시를 배경으로 깔고 어둡게 처리한다.
+     지금은 이미지가 없어 플레이스홀더 그라데이션이 그 자리를 대신한다. */
+  .champs{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .champ-card{position:relative;overflow:hidden;border-radius:10px;
+              border:1px solid var(--line);min-height:120px;display:flex;
+              align-items:center;gap:14px;padding:16px}
+  .champ-card .splash{position:absolute;inset:0;background-size:cover;
+                      background-position:center 22%;
+                      /* 배경 위에 글자가 읽히도록 어둡게 */
+                      filter:brightness(.35) saturate(.85)}
+  .champ-card .splash.ph{background:
+      linear-gradient(135deg,#243447 0%,#161b22 60%,#10141a 100%)}
+  .champ-card .splash.ph::after{content:attr(data-name);position:absolute;
+      right:10px;bottom:4px;font-size:34px;font-weight:800;color:#ffffff12;
+      letter-spacing:1px;white-space:nowrap}
+  .champ-card > *{position:relative}
+
+  /* 챔프 아이콘 = 64px 원형. 이미지가 없으면 챔프명 텍스트 플레이스홀더. */
+  .champ-icon{width:64px;height:64px;border-radius:50%;flex:0 0 64px;
+              background:var(--panel2);border:1px solid var(--line);
+              display:flex;align-items:center;justify-content:center;
+              text-align:center;font-size:11px;line-height:1.15;color:var(--dim);
+              overflow:hidden;background-size:cover;background-position:center}
+  .champ-icon.sm{width:36px;height:36px;flex-basis:36px;font-size:9px}
+  .champ-name{font-weight:700;font-size:15px}
+  .champ-sub{color:#c8d3de;font-size:12px}
+
+  /* 아이템 등 기타 이미지 자리 — 정사각형 플레이스홀더 */
+  .sq{width:40px;height:40px;border-radius:6px;background:var(--panel2);
+      border:1px solid var(--line);display:inline-flex;align-items:center;
+      justify-content:center;font-size:9px;color:var(--dim);text-align:center;
+      overflow:hidden;background-size:cover}
+
+  .bar{height:8px;background:var(--panel2);border-radius:99px;overflow:hidden;margin:8px 0}
+  .bar > i{display:block;height:100%;background:var(--accent)}
+  .task{background:var(--panel2);border-left:3px solid var(--accent);
+        padding:10px 14px;border-radius:0 8px 8px 0}
+  table{border-collapse:collapse;width:100%;font-size:13px}
+  th,td{border-bottom:1px solid var(--line);padding:7px 8px;text-align:left;
+        vertical-align:middle}
+  th{color:var(--dim);font-weight:600}
+  td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
+  .pill{display:inline-block;padding:1px 8px;border-radius:99px;font-size:11px;
+        background:var(--panel2);color:var(--dim)}
+  .pill.now{background:#123a63;color:#9dcaff}
+  .win{color:var(--good)} .lose{color:var(--bad)}
+  .stars{display:inline-flex;gap:3px}
+  .stars button{width:24px;height:24px;border-radius:6px;border:1px solid var(--line);
+                background:var(--panel2);color:var(--dim);cursor:pointer;font:inherit;
+                font-size:12px;padding:0}
+  .stars button:hover{border-color:var(--accent);color:var(--fg)}
+  .stars button.on{background:var(--accent);border-color:var(--accent);color:#08121f;
+                   font-weight:700}
+  .md h1{font-size:19px;margin:18px 0 8px} .md h2{font-size:16px;margin:20px 0 8px}
+  .md h3{font-size:14px;margin:16px 0 6px;color:#c8d3de}
+  .md table{margin:8px 0 14px} .md p{margin:8px 0}
+  .md hr{border:0;border-top:1px solid var(--line);margin:18px 0}
+  .md code{background:var(--panel2);padding:1px 5px;border-radius:4px;font-size:12px}
+  .md ul,.md ol{margin:8px 0;padding-left:22px}
+  .scroll{overflow-x:auto}
+  .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+  input[type=text]{background:var(--panel2);border:1px solid var(--line);color:var(--fg);
+                   border-radius:6px;padding:6px 10px;font:inherit;min-width:220px}
+</style>
+</head>
+<body>
+<header>
+  <h1>심은렬 다이아만들기</h1>
+  <span class="who" id="who"></span>
+</header>
+<nav>
+  <button data-tab="today" class="on">오늘</button>
+  <button data-tab="explore">탐색</button>
+  <button data-tab="report">진단</button>
+  <button data-tab="coach">코치</button>
+</nav>
+<main>
+  <section id="today" class="on"><p class="muted">불러오는 중…</p></section>
+  <section id="explore"><p class="muted">불러오는 중…</p></section>
+  <section id="report"><p class="muted">불러오는 중…</p></section>
+  <section id="coach"><p class="muted">불러오는 중…</p></section>
+</main>
+
+<script>
+// ---------------------------------------------------------------- 이미지 --
+// 챔프·아이템 이미지는 지금 붙이지 않는다. 화면 구조가 확정되기 전에 에셋을 붙이면
+// 두 번 일한다(SPEC.md "대시보드 UI"). null 을 주면 플레이스홀더가 그려진다.
+// 나중에 교체할 때는 아래 두 함수만 고치면 된다.
+//   아이콘   https://ddragon.leagueoflegends.com/cdn/<ver>/img/champion/<Champ>.png
+//   스플래시 https://ddragon.leagueoflegends.com/cdn/img/champion/splash/<Champ>_0.jpg
+const USE_CDN = false;
+let DDRAGON_VERSION = null;
+function champIcon(name){
+  if(!USE_CDN || !name || !DDRAGON_VERSION) return null;
+  return `https://ddragon.leagueoflegends.com/cdn/${DDRAGON_VERSION}/img/champion/${name}.png`;
+}
+function champSplash(name){
+  if(!USE_CDN || !name) return null;
+  return `https://ddragon.leagueoflegends.com/cdn/img/champion/splash/${name}_0.jpg`;
+}
+
+let KO = {};
+const ko = n => KO[n] || n;
+
+// ------------------------------------------------------------------ 유틸 --
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c =>
+  ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const num = (v, d=2) => (v===null||v===undefined) ? "—" : Number(v).toFixed(d);
+const pct = v => (v===null||v===undefined) ? "—" : (Number(v)*100).toFixed(1)+"%";
+
+async function get(path){
+  const r = await fetch(path);
+  if(!r.ok){
+    let d = ""; try{ d = (await r.json()).detail || ""; }catch(e){}
+    throw new Error(d || `${path} — HTTP ${r.status}`);
+  }
+  return r.json();
+}
+function fail(sel, e){
+  $(sel).innerHTML = `<div class="card"><p class="err">${esc(e.message)}</p></div>`;
+}
+
+function iconHtml(name, cls){
+  const url = champIcon(name);
+  const style = url ? ` style="background-image:url('${url}')"` : "";
+  // 36px 짜리에는 "말파이트"가 안 들어가 두 줄로 깨진다. 플레이스홀더는 앞 두 글자만.
+  const full = ko(name);
+  const label = url ? "" : esc(cls === "sm" ? full.slice(0, 2) : full);
+  return `<div class="champ-icon ${cls||""}"${style} title="${esc(full)}">${label}</div>`;
+}
+
+// ------------------------------------------------------- 미니 마크다운 --
+// 리포트는 제목·표·굵게가 거의 전부다. 이 정도라면 외부 라이브러리를 받아올 이유가
+// 없다(로컬 도구라 오프라인에서도 떠야 한다).
+function md(src){
+  const inline = t => esc(t)
+    .replace(/`([^`]+)`/g, "<code>$1</code>")
+    .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
+    .replace(/(^|\W)_([^_]+)_(?=\W|$)/g, "$1<em>$2</em>");
+  const lines = String(src).split(/\r?\n/);
+  const out = [];
+  let i = 0, para = [], list = null;
+  const flushP = () => { if(para.length){ out.push(`<p>${inline(para.join(" "))}</p>`); para = []; } };
+  const flushL = () => { if(list){ out.push(`</${list}>`); list = null; } };
+  const isRow = s => /^\s*\|.*\|\s*$/.test(s);
+  const cells = s => s.trim().replace(/^\||\|$/g, "").split("|").map(c => c.trim());
+
+  while(i < lines.length){
+    const line = lines[i];
+    if(isRow(line) && isRow(lines[i+1] || "") && /^[\s|:-]+$/.test(lines[i+1])){
+      flushP(); flushL();
+      const head = cells(line); i += 2;
+      const body = [];
+      while(i < lines.length && isRow(lines[i])){ body.push(cells(lines[i])); i++; }
+      const th = head.map(h => `<th>${inline(h)}</th>`).join("");
+      const tr = body.map(r => "<tr>" + r.map(c => `<td>${inline(c)}</td>`).join("") + "</tr>").join("");
+      out.push(`<div class="scroll"><table><thead><tr>${th}</tr></thead><tbody>${tr}</tbody></table></div>`);
+      continue;
+    }
+    const h = line.match(/^(#{1,4})\s+(.*)$/);
+    if(h){ flushP(); flushL(); out.push(`<h${h[1].length}>${inline(h[2])}</h${h[1].length}>`); i++; continue; }
+    if(/^\s*---+\s*$/.test(line)){ flushP(); flushL(); out.push("<hr>"); i++; continue; }
+    const li = line.match(/^\s*([-*]|\d+\.)\s+(.*)$/);
+    if(li){
+      flushP();
+      const want = /^\d/.test(li[1]) ? "ol" : "ul";
+      if(list !== want){ flushL(); out.push(`<${want}>`); list = want; }
+      out.push(`<li>${inline(li[2])}</li>`); i++; continue;
+    }
+    if(!line.trim()){ flushP(); flushL(); i++; continue; }
+    flushL(); para.push(line.trim()); i++;
+  }
+  flushP(); flushL();
+  return `<div class="md">${out.join("\n")}</div>`;
+}
+
+// ------------------------------------------------------------- 오늘 화면 --
+function starsHtml(m){
+  const b = n => `<button data-match="${esc(m.match_id)}" data-score="${n}"
+    class="${m.score===n?"on":""}">${n}</button>`;
+  return `<span class="stars">${[1,2,3,4,5].map(b).join("")}</span>`;
+}
+
+async function loadToday(){
+  let d;
+  try{ d = await get("/today"); }catch(e){ return fail("#today", e); }
+  KO = d.champ_ko || {}; DDRAGON_VERSION = d.ddragon_version;
+  $("#who").textContent = d.riot_id || "";
+  const p = d.phase;
+
+  const champCards = !p ? "" : `<div class="champs">${
+    (p.current_champs||[]).map(c => {
+      const sp = champSplash(c);
+      const bg = sp ? `<div class="splash" style="background-image:url('${sp}')"></div>`
+                    : `<div class="splash ph" data-name="${esc(c)}"></div>`;
+      return `<div class="champ-card">${bg}${iconHtml(c)}
+        <div><div class="champ-name">${esc(ko(c))}</div>
+        <div class="champ-sub">${esc(c)} · 기준 챔프</div></div></div>`;
+    }).join("")}</div>`;
+
+  const prog = !p ? "" : `
+    <div class="card">
+      <h2>지금 할 것 — ${p.current_role ? esc(p.current_role) : "전 라인 목표 달성"}</h2>
+      ${champCards}
+      <div class="bar"><i style="width:${p.target?(p.done/p.target*100):0}%"></i></div>
+      <div class="row muted">
+        <span>전체 <b class="win">${p.done}</b> / ${p.target}판</span>
+        ${p.current_role ? `<span>· 이 라인 ${p.current_games}/${p.current_target}판
+          (<b>${p.current_left}판 남음</b>)</span>` : ""}
+        <span>· 순서 ${(p.order||[]).join(" → ")}</span>
+      </div>
+      ${p.complete ? "" : `<p class="muted" style="margin:10px 0 0">
+        75판을 채우기 전에는 라인을 결정하지 않습니다.</p>`}
+    </div>`;
+
+  const task = `<div class="card"><h2>이번 주 과제</h2>
+    <div class="task">${esc(d.weekly_task)}</div>
+    ${d.memo_headline ? `<p class="muted" style="margin-bottom:0">${md(d.memo_headline)}</p>` : ""}
+    </div>`;
+
+  const unrated = d.unrated?.length
+    ? `<p class="muted">평점을 안 남긴 탐색 경기 <b class="win">${d.unrated.length}판</b>이 있습니다.</p>`
+    : `<p class="muted">평점을 안 남긴 탐색 경기는 없습니다.</p>`;
+
+  const rows = (d.recent||[]).map(m => `
+    <tr>
+      <td class="muted">${esc(m.when)}</td>
+      <td class="row" style="gap:8px">${iconHtml(m.champion,"sm")}<span>${esc(m.champion_ko)}</span></td>
+      <td>${esc(m.role)}</td>
+      <td class="${m.win?"win":"lose"}">${m.win?"승":"패"}</td>
+      <td class="num">${esc(m.kda)}</td>
+      <td>${starsHtml(m)}</td>
+      <td class="muted">${esc(m.memo||"")}</td>
+    </tr>`).join("");
+
+  $("#today").innerHTML = prog + task + `
+    <div class="card"><h2>최근 경기 — 30초 루틴</h2>
+      ${unrated}
+      <div class="row" style="margin:10px 0">
+        <input type="text" id="rateMemo" placeholder="메모 (선택) — 점수를 누르면 같이 저장됩니다">
+      </div>
+      <div class="scroll"><table>
+        <thead><tr><th>시각</th><th>챔프</th><th>라인</th><th>결과</th>
+        <th class="num">K/D/A</th><th>재미</th><th>메모</th></tr></thead>
+        <tbody>${rows || `<tr><td colspan="7" class="muted">경기가 없습니다.</td></tr>`}</tbody>
+      </table></div>
+    </div>`;
+
+  $("#today").querySelectorAll(".stars button").forEach(b => {
+    b.onclick = () => sendRate(b.dataset.match, Number(b.dataset.score));
+  });
+}
+
+async function sendRate(match_id, score){
+  const memo = ($("#rateMemo")?.value || "").trim() || null;
+  try{
+    const r = await fetch("/rate", {
+      method:"POST", headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({score, memo, match_id}),
+    });
+    if(!r.ok) throw new Error((await r.json()).detail || `HTTP ${r.status}`);
+    if($("#rateMemo")) $("#rateMemo").value = "";
+    await loadToday();
+    await loadExplore();   // 재미 점수는 적합도에 30% 들어간다 — 탐색 화면도 갱신
+  }catch(e){ alert("기록 실패: " + e.message); }
+}
+
+// ------------------------------------------------------------- 탐색 화면 --
+async function loadExplore(){
+  let d;
+  try{ d = await get("/explore"); }catch(e){ return fail("#explore", e); }
+  KO = d.champ_ko || KO;
+
+  const rows = d.reports.map(r => `
+    <tr>
+      <td class="row" style="gap:8px">
+        ${(r.champs||[]).map(c => iconHtml(c,"sm")).join("")}
+        <span><b>${esc(r.role)}</b> ${r.is_current?'<span class="pill now">지금</span>':""}</span>
+      </td>
+      <td class="num">${r.games}/${r.target}</td>
+      <td class="num">${r.violations||0}</td>
+      <td class="num">${r.order_violations||0}</td>
+      <td class="num">${pct(r.winrate)}</td>
+      <td class="num">${num(r.fun_avg,1)}</td>
+      <td class="num">${num(r.metric_score,2)}</td>
+      <td class="num"><b>${num(r.fit,2)}</b></td>
+      <td class="muted">${(r.champs||[]).map(c=>esc(ko(c))).join(", ")}</td>
+    </tr>`).join("");
+
+  $("#explore").innerHTML = `
+    <div class="card">
+      <h2>탐색 단계 '${esc(d.phase_name)}' · 시작 ${esc(d.start_date)}</h2>
+      <div class="bar"><i style="width:${d.target?(d.done/d.target*100):0}%"></i></div>
+      <p class="muted">진행 <b class="win">${d.done}</b>/${d.target}판 ·
+        순서 ${(d.order||[]).join(" → ")}
+        ${d.current_role?` · 지금 <b>${esc(d.current_role)}</b> (${d.current_left}판 남음)`:""}</p>
+      <div class="scroll"><table>
+        <thead><tr><th>라인</th><th class="num">진행</th><th class="num">챔프위반</th>
+        <th class="num">순서위반</th><th class="num">승률</th><th class="num">재미</th>
+        <th class="num">지표</th><th class="num">적합도</th><th>기준 챔프</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table></div>
+      <p class="muted" style="margin-bottom:0">적합도 = 지표 70% + 재미 30%.
+        축은 브론즈 벤치=0, 골드 벤치=1.
+        ${d.complete?"":"75판을 채우기 전에는 라인을 결정하지 않습니다."}</p>
+    </div>`;
+}
+
+// ------------------------------------------------------------- 진단 화면 --
+async function loadReport(){
+  try{
+    const d = await get("/report");
+    $("#report").innerHTML = `<div class="card">${md(d.markdown)}</div>`;
+  }catch(e){ fail("#report", e); }
+}
+
+// ------------------------------------------------------------- 코치 화면 --
+async function loadCoach(){
+  try{
+    const d = await get("/coach");
+    $("#coach").innerHTML = `
+      <div class="card">
+        <h2>코치 메모</h2>
+        <p class="muted">${esc(d.report_date)} · ${esc(d.model)} ·
+          입력 ${d.input_tokens} / 출력 ${d.output_tokens} 토큰</p>
+        <div class="task" style="margin-bottom:14px">이번 주 과제 — ${esc(d.weekly_task)}</div>
+        ${md(d.memo)}
+      </div>`;
+  }catch(e){ fail("#coach", e); }
+}
+
+// -------------------------------------------------------------------- 탭 --
+const LOADERS = {today:loadToday, explore:loadExplore, report:loadReport, coach:loadCoach};
+const loaded = {};
+function show(tab){
+  document.querySelectorAll("nav button").forEach(b => b.classList.toggle("on", b.dataset.tab===tab));
+  document.querySelectorAll("main section").forEach(s => s.classList.toggle("on", s.id===tab));
+  if(!loaded[tab]){ loaded[tab] = true; LOADERS[tab](); }
+}
+document.querySelectorAll("nav button").forEach(b => b.onclick = () => show(b.dataset.tab));
+show("today");
+</script>
+</body>
+</html>

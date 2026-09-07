@@ -328,6 +328,19 @@ def main() -> int:
               and "과제를 바꾸지" in coach.SYSTEM_PROMPT)
         check("코치 프롬프트에 추정 지표 주의", "_(추정)_" in coach.SYSTEM_PROMPT)
         check("코치 프롬프트에 탐색 진행 현황 항목", "탐색 단계 진행 현황" in coach.SYSTEM_PROMPT)
+
+        from sim_diamond import web  # noqa: E402
+        paths = {r.path for r in web.app.routes}
+        check("대시보드 엔드포인트 5개 + 화면",
+              {"/today", "/explore", "/report", "/coach", "/rate", "/"} <= paths,
+              ", ".join(sorted(paths)))
+        check("대시보드 화면 파일 존재", (web.STATIC_DIR / "index.html").is_file())
+        # 지표에는 표본이 없어 NaN 인 칸이 많다. 그대로 내보내면 JSON 파싱이 깨진다.
+        cleaned = web._clean({"a": float("nan"), "b": [float("inf"), 1.5], "c": True})
+        check("NaN·Infinity 를 null 로 바꿔서 내보낸다",
+              cleaned == {"a": None, "b": [None, 1.5], "c": True}, str(cleaned))
+        check("대시보드는 루프백에만 바인딩한다(인증이 없다)",
+              web.DEFAULT_HOST == "127.0.0.1", web.DEFAULT_HOST)
         print(f"  리포트 {len(text.encode('utf-8'))} bytes → {args.report}")
 
     if not args.keep:
