@@ -3,6 +3,9 @@
 이 파일은 Claude Code 가 세션 시작 시 자동으로 읽는다. 이 프로젝트에서 일하기 전에
 전부 읽어라.
 
+**`SPEC.md` 도 같이 읽어라.** 그쪽은 사용자가 직접 쓴 요구사항(무엇을 왜 원하는가)이고
+이 파일은 구현 기록(어떻게 만들었나)이다. 둘이 충돌하면 `SPEC.md` 가 우선이다.
+
 ---
 
 ## 0. 사용자와 목표
@@ -59,14 +62,21 @@
 
 ### 아직 안 한 것
 1. **코치 메모 실제 생성** — `ANTHROPIC_API_KEY` 가 없어 한 번도 실행 못 했다.
-2. 탐색 경기 0판 (단계만 등록됨)
+   `coach_memo` 테이블 0행. `anthropic` 1.4.0 은 설치했고, `coach.py` 의 API 사용
+   (`claude-opus-5` / `thinking={"type":"adaptive"}` / `output_config={"effort":"high"}` /
+   `messages.stream`)은 현행 스펙과 일치하는 것을 확인했다. **키만 넣으면 바로 돌아간다.**
+2. 탐색 경기 0판 (단계는 등록 완료). `self_rating` 도 0행.
 3. 리플레이(.replay) 파싱 — 와드 좌표 실측. 3단계 후보.
 
 ---
 
-## 2. 지금 막혀 있는 것 (최우선)
+## 2. 환경 문제 (2026-09-07 해결됨 — 재발 시 참고)
 
-사용자 PC 에서 `git pull` 이 실패한다:
+> **이 장의 두 문제는 모두 해결됐다.** 아래는 같은 증상이 다시 났을 때를 위한 기록이다.
+> 확인 결과 `.env.example` 에는 실제 키가 없었고, `.env` 의 `RIOT_API_KEY` 는 정상이었다
+> (`doctor` 로 실제 호출 → HTTP 200). 탐색 단계도 `role_order` 0~4 로 이미 재생성돼 있었다.
+
+과거 증상 — 사용자 PC 에서 `git pull` 이 실패했다:
 
 ```
 error: Your local changes to the following files would be overwritten by merge:
@@ -83,6 +93,9 @@ git pull
 
 `.env.example.bak` 에 원본이 남으니 `.env` 에 키가 없으면 거기서 복사한다.
 `.env` 와 `data/sim.db` 는 `.gitignore` 대상이라 안전하다.
+
+**주의: 현재 저장소에 있는 `.env.example.bak` 의 키는 `RGAPI-RGAPI-...` 로 접두사가 두 번
+붙은 48자짜리 깨진 값이다.** 복구용으로 쓰지 마라. 쓸 수 있는 키는 `.env` 쪽이다.
 
 라이엇 키는 사용자가 현재 것을 그대로 쓰기로 했다. 재발급을 권하지 마라.
 
@@ -103,6 +116,15 @@ git pull
 - `.env` = 진짜 설정. `.gitignore` 대상. **키는 여기에만.**
 - `.env.example` = git 이 관리하는 빈 템플릿. **여기에 키를 넣으면 pull 이 막히고
   커밋하면 공개된다.** `doctor` 가 이 실수를 잡아준다.
+
+### 파이썬 실행 환경
+
+**`.venv` 를 쓰지 마라.** 저장소에 `.venv` 디렉터리가 있지만 안에 `pip` 밖에 없어서
+`python -m sim_diamond.doctor` 를 돌리면 `ModuleNotFoundError: No module named 'requests'`
+가 난다. 패키지는 **전역 Python 3.13.6** 에 깔려 있다. 그냥 `python -m sim_diamond....`
+로 실행해라.
+
+콘솔에 한글이 깨져 보이면 `set PYTHONIOENCODING=utf-8` 을 먼저 실행하면 된다.
 
 ### Windows 함정
 - 메모장이 `.env` 를 `.env.txt` 로 저장한다 → `doctor` 가 감지해서 `ren` 명령을 알려준다
@@ -231,17 +253,18 @@ r2500 에서만 잡히는 걸 검증한다.
 
 ## 8. 다음에 할 일 (순서대로)
 
-1. **git pull 막힘 해결** (2장)
-2. `python -m sim_diamond.phase init-explore ...` 재실행 — 지금 DB 의 단계는 구버전이라
-   `role_order` 가 없다. 탐색 0판이라 잃을 게 없다.
+1. ~~git pull 막힘 해결~~ — **완료** (2026-09-07)
+2. ~~`phase init-explore` 재실행~~ — **완료.** 5개 라인 0/75판, `role_order` 정상
 3. **코치 메모 첫 실행** — `.env` 에 `ANTHROPIC_API_KEY` 추가 후
    `python -m sim_diamond.coach --dry-run` 으로 프롬프트 확인 → `coach` 실행.
    출력이 900자 이내인지, 존댓말인지, "이번 주 과제"가 정확히 1개인지, 라인 추천을
    안 하는지 확인하고 어긋나면 `coach.SYSTEM_PROMPT` 를 조여라.
 4. 탐색 진행 — 경기마다 `python -m sim_diamond.rate <1-5> "메모"`,
    주기적으로 `collect_me` + `report` + `coach`
-5. 75판 완료 후 라인 결정 → 집중 단계(`phase add`)
-6. (선택) 리플레이 파싱으로 와드 좌표 실측
+5. **로컬 대시보드 UI** — FastAPI 5개 엔드포인트(`/today` `/explore` `/report` `/coach`
+   `/rate`) + 화면 4개(오늘/탐색/진단/코치). 아직 코드 0줄이고 `fastapi` 도 미설치다.
+6. 75판 완료 후 라인 결정 → 집중 단계(`phase add`)
+7. (선택) 리플레이 파싱으로 와드 좌표 실측
 
 ---
 
