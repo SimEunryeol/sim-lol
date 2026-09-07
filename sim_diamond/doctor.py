@@ -25,18 +25,47 @@ def _mask(key: str) -> str:
     return f"{key[:MASK_HEAD]}…{'*' * 6}…{key[-MASK_TAIL:]}"
 
 
+PREFIX = "RGAPI-"
+
+
 def _describe_chars(key: str) -> list[str]:
+    """키 문자열 자체의 문제를 찾는다. 붙여넣기 사고가 대부분이다."""
     problems = []
+    if key.startswith(PREFIX * 2):
+        problems.append(
+            f"'{PREFIX}' 가 두 번 들어가 있습니다 — .env 에 이미 있던 {PREFIX} 뒤에 "
+            f"{PREFIX} 로 시작하는 키를 그대로 붙여넣으면 이렇게 됩니다. "
+            f"앞쪽 {PREFIX} 하나를 지우세요. ★"
+        )
+    elif key.count(PREFIX) > 1:
+        problems.append(f"'{PREFIX}' 가 {key.count(PREFIX)}번 나옵니다 — 키가 두 번 붙여넣어졌을 수 있습니다. ★")
     if key != key.strip():
         problems.append("앞뒤에 공백/개행이 붙어 있습니다")
     if any(c in key for c in "\"'"):
         problems.append("따옴표가 섞여 있습니다 (.env 에는 따옴표 없이 써야 합니다)")
     if " " in key.strip():
         problems.append("중간에 공백이 있습니다")
+    if key.startswith(PREFIX) and len(key) != EXPECTED_LEN and PREFIX * 2 not in key:
+        diff = len(key) - EXPECTED_LEN
+        problems.append(
+            f"길이가 {EXPECTED_LEN}자가 아닙니다 ({'+' if diff > 0 else ''}{diff}자) — "
+            + ("뒤에 뭔가 더 붙었거나 두 번 붙여넣었는지 확인하세요."
+               if diff > 0 else "복사할 때 일부가 잘렸는지 확인하세요.")
+        )
     weird = sorted({c for c in key if not (c.isalnum() or c in "-_")})
     if weird:
         problems.append(f"예상 밖 문자: {weird!r}")
     return problems
+
+
+def suggest_fix(key: str) -> str | None:
+    """고칠 수 있는 형태면 고친 값을 (마스킹해서) 제안한다."""
+    fixed = key.strip().strip("\"'").replace(" ", "")
+    while fixed.startswith(PREFIX * 2):
+        fixed = fixed[len(PREFIX):]
+    if fixed != key and fixed.startswith(PREFIX):
+        return fixed
+    return None
 
 
 def check_env_file() -> str | None:
@@ -68,7 +97,7 @@ def check_env_file() -> str | None:
     return raw_line
 
 
-def check_key() -> str:
+def check_key() -> tuple[str, list[str]]:
     print("\n[2] 실제로 읽어들인 값")
     st = config.load_settings(require_key=False)
     key = os.getenv("RIOT_API_KEY", "").strip().strip("\"'")
@@ -78,23 +107,29 @@ def check_key() -> str:
 
     if not key:
         print("    진단     : 키를 못 읽었습니다.")
-        return key
+        return key, ["키 없음"]
     if key == config.PLACEHOLDER_KEY:
         print("    진단     : .env.example 의 예시 키 그대로입니다. 실제 키로 바꾸지 않았습니다. ★")
-        return key
+        return key, ["예시 키"]
+
     ok = []
-    if key.startswith("RGAPI-"):
-        ok.append("RGAPI- 로 시작 OK")
+    if key.startswith(PREFIX):
+        ok.append(f"{PREFIX} 로 시작 OK")
     else:
-        ok.append(f"! 'RGAPI-' 로 시작하지 않음 (앞 6자 {key[:6]!r})")
-    if len(key) == EXPECTED_LEN:
-        ok.append(f"길이 {EXPECTED_LEN} OK")
-    else:
-        ok.append(f"! 길이 {len(key)} (개발용 키는 보통 {EXPECTED_LEN}자)")
+        ok.append(f"! '{PREFIX}' 로 시작하지 않음 (앞 6자 {key[:6]!r})")
+    ok.append(f"길이 {EXPECTED_LEN} OK" if len(key) == EXPECTED_LEN else f"! 길이 {len(key)}")
     print(f"    형식     : {' / '.join(ok)}")
-    for p in _describe_chars(key):
-        print(f"    !        : {p}")
-    return key
+
+    problems = _describe_chars(key)
+    if not key.startswith(PREFIX):
+        problems.append(f"'{PREFIX}' 로 시작하지 않습니다")
+    for item in problems:
+        print(f"    !        : {item}")
+    fix = suggest_fix(key)
+    if fix:
+        print(f"    고치면   : {_mask(fix)}  (길이 {len(fix)}자)"
+              f"{'  ← 이 형태가 맞습니다' if len(fix) == EXPECTED_LEN else ''}")
+    return key, problems
 
 
 DIAGNOSIS = {
@@ -107,7 +142,7 @@ DIAGNOSIS = {
 }
 
 
-def live_call(key: str) -> int:
+def live_call(key: str, problems: list[str] | None = None) -> int:
     url = (f"{config.REGIONAL}/riot/account/v1/accounts/by-riot-id/"
            f"{os.getenv('RIOT_ID', 'F360')}/{os.getenv('RIOT_TAG', 'KR1')}")
     print("\n[3] 실제 호출 (캐시 안 씀)")
@@ -133,6 +168,14 @@ def live_call(key: str) -> int:
               f"puuid={str(body.get('puuid'))[:16]}…")
         print("    이제 python -m sim_diamond.collect_me --limit 20 을 실행하세요.")
         return 0
+    if problems and resp.status_code in (401, 403):
+        # 형식이 깨져 있으면 만료가 아니라 그것부터가 원인이다.
+        print("\n    진단: 키 형식이 잘못됐습니다. 만료 문제가 아니라 아래부터 고치세요 —")
+        for item in problems:
+            print(f"           · {item}")
+        path = config.ROOT / ".env"
+        print(f"\n           {'notepad ' if os.name == 'nt' else '${EDITOR:-vi} '}{path}")
+        return 1
     print(f"\n    진단: {DIAGNOSIS.get(resp.status_code, '예상 밖 응답입니다. 위 본문을 그대로 공유해 주세요.')}")
     return 1
 
@@ -143,7 +186,7 @@ def main() -> int:
     print(f"  파이썬 {sys.version.split()[0]} · 작업 폴더 {config.ROOT}")
     print("=" * 66)
     check_env_file()
-    key = check_key()
+    key, problems = check_key()
     if not key:
         print("\n키가 없어 호출 테스트를 건너뜁니다.")
         return 1
@@ -152,7 +195,7 @@ def main() -> int:
         print(f"    notepad {config.ROOT / '.env'}" if __import__('os').name == "nt"
               else f"    ${{EDITOR:-vi}} {config.ROOT / '.env'}")
         return 1
-    return live_call(key)
+    return live_call(key, problems)
 
 
 if __name__ == "__main__":
