@@ -23,6 +23,7 @@ WARD_RADIUS = 1500.0
 OBJECTIVE_RADIUS = 2500.0
 FULL_CLEAR_JUNGLE_CS = 12      # 첫 풀캠프 완료 근사 기준
 FIRST_GANK_AFTER_MS = 180_000
+LANE_ZONES = {"TOP", "MID", "BOT"}   # 첫 갱으로 인정하는 구역
 BACK_CLUSTER_GAP_MS = 20_000   # 이 간격보다 벌어지면 다른 상점 방문으로 본다
 DEATH_BACK_WINDOW_MS = 75_000  # 데스 후 이 시간 안의 상점 방문은 부활 귀환으로 본다
 DEATH_BUCKETS = ((0, 5), (5, 10), (10, 15), (15, 20), (20, 25), (25, 10**6))
@@ -252,6 +253,7 @@ def _jungle(ctx: MatchContext, puuid: str) -> dict:
     out: dict[str, Any] = {
         "is_jungle": int(me["team_position"] == "JUNGLE"),
         "first_full_clear_min": None, "first_gank_min": None,
+        "first_counter_jungled_min": None,
         "jg_gold_diff_5": None, "jg_gold_diff_10": None,
         "jg_level_diff_5": None, "jg_level_diff_10": None,
         "enemy_jungle_minutes": None,
@@ -263,16 +265,27 @@ def _jungle(ctx: MatchContext, puuid: str) -> dict:
     series = [(m, fr[m]["jungle_cs"]) for m in sorted(fr)]
     out["first_full_clear_min"] = _interp_cross(series, FULL_CLEAR_JUNGLE_CS)
 
+    # 첫 갱: 3분 이후, 라인 구역(탑/미드/봇)에서 내가 딴 첫 킬/어시.
+    # 정글(내/적)이나 강·둥지에서 난 교전, 그리고 내 데스는 포함하지 않는다.
     for e in ctx.by_type.get("CHAMPION_KILL", []):
         if (e["ts_ms"] or 0) < FIRST_GANK_AFTER_MS:
             continue
-        involved = (
+        if geo.zone_raw(e["x"], e["y"]) not in LANE_ZONES:
+            continue
+        credited = (
             e["killer_puuid"] == puuid
-            or e["victim_puuid"] == puuid
             or puuid in (e["extra_d"].get("assisting_puuids") or [])
         )
-        if involved:
+        if credited:
             out["first_gank_min"] = round((e["ts_ms"] or 0) / 60_000, 2)
+            break
+
+    # 첫 카정 피해: 내 정글에서 내가 죽은 첫 시각. 초반 인베이드가 핵심이라 시간 하한은 두지 않는다.
+    for e in ctx.by_type.get("CHAMPION_KILL", []):
+        if e["victim_puuid"] != puuid:
+            continue
+        if geo.zone(e["x"], e["y"], me["team_id"]) == "OWN_JUNGLE":
+            out["first_counter_jungled_min"] = round((e["ts_ms"] or 0) / 60_000, 2)
             break
 
     enemy_team = 200 if me["team_id"] == 100 else 100

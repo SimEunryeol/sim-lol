@@ -208,6 +208,7 @@ METRIC_COLUMNS: list[tuple[str, str]] = [
     ("is_jungle", "INTEGER"),
     ("first_full_clear_min", "REAL"),
     ("first_gank_min", "REAL"),
+    ("first_counter_jungled_min", "REAL"),
     ("jg_gold_diff_5", "INTEGER"),
     ("jg_gold_diff_10", "INTEGER"),
     ("jg_level_diff_5", "REAL"),
@@ -248,7 +249,19 @@ def init_db(conn: sqlite3.Connection) -> None:
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_metrics_pos ON participant_metrics(team_position)"
     )
+    _migrate_metrics(conn)
     conn.commit()
+
+
+def _migrate_metrics(conn: sqlite3.Connection) -> list[str]:
+    """예전 DB 에 METRIC_COLUMNS 가 늘어난 만큼 컬럼을 붙인다(데이터는 보존)."""
+    have = {r["name"] for r in conn.execute("PRAGMA table_info(participant_metrics)")}
+    added = []
+    for name, decl in METRIC_COLUMNS:
+        if name not in have:
+            conn.execute(f"ALTER TABLE participant_metrics ADD COLUMN {name} {decl.replace('NOT NULL', '')}")
+            added.append(name)
+    return added
 
 
 @contextmanager

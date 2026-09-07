@@ -149,7 +149,7 @@ def s_positions(me: pd.DataFrame, df: pd.DataFrame) -> str:
         ("vision_per_min", "시야점수/분", lambda v: fmt(v, 3)),
         ("control_wards", "컨트롤 와드 구매", lambda v: fmt(v, 1)),
         ("first_control_ward_min", "첫 컨트롤 와드(분)", lambda v: fmt(v, 1)),
-        ("obj_participation", "오브젝트 참여율", pct),
+        ("obj_participation", "오브젝트 참여율 _(추정)_", pct),
     ]
     for pos in POSITION_ORDER:
         sub = me[me["team_position"] == pos]
@@ -223,7 +223,7 @@ def s_deaths(deaths: pd.DataFrame, me_metrics: pd.DataFrame) -> str:
         unwarded = int((judged["warded"] == 0).sum())
         out.append(
             f"\n- 총 데스 **{total}회**, 그중 판정 가능한 **{len(judged)}회** 기준\n"
-            f"- 죽기 직전 60초 안에 반경 1500 내 아군 와드가 **없던** 데스: "
+            f"- 죽기 직전 60초 안에 반경 1500 내 아군 와드가 **없던** 데스 _(추정)_: "
             f"**{unwarded}회 ({pct(unwarded / len(judged))})**\n"
             f"- 15분 이전 데스: **{int((mine['minute'] < 15).sum())}회** "
             f"(판당 {fmt((mine['minute'] < 15).sum() / max(1, len(me_metrics)), 2)})\n"
@@ -236,25 +236,38 @@ def s_jungle(me: pd.DataFrame, df: pd.DataFrame) -> str:
     if jg.empty:
         return ""
     spec = [
-        ("first_full_clear_min", "첫 풀캠프 완료(분)", lambda v: fmt(v, 2)),
-        ("first_gank_min", "첫 갱/교전 관여(분)", lambda v: fmt(v, 2)),
+        ("first_full_clear_min", "첫 풀캠프 완료(분) _(추정)_", lambda v: fmt(v, 2)),
+        ("first_gank_min", "첫 갱(분)", lambda v: fmt(v, 2)),
+        ("gank_rate", "갱 성사 판 비율", pct),
+        ("first_counter_jungled_min", "첫 카정 피해(분)", lambda v: fmt(v, 2)),
+        ("counter_jungled_rate", "카정 피해 판 비율", pct),
         ("jg_gold_diff_5", "5분 정글 골드 차이", lambda v: fmt(v, 0, plus=True)),
         ("jg_gold_diff_10", "10분 정글 골드 차이", lambda v: fmt(v, 0, plus=True)),
         ("jg_level_diff_10", "10분 레벨 차이", lambda v: fmt(v, 2, plus=True)),
         ("enemy_jungle_minutes", "적정글 체류(분/판)", lambda v: fmt(v, 2)),
-        ("obj_participation", "오브젝트 참여율", pct),
+        ("obj_participation", "오브젝트 참여율 _(추정)_", pct),
     ]
 
     def jagg(d: pd.DataFrame) -> dict:
         d = d[d["is_jungle"] == 1]
         if d.empty:
             return {}
-        return {k: d[k].mean() for k, _, _ in spec}
+        # 첫 갱/첫 카정 평균은 "실제로 일어난 판"만 대상으로 한다(없는 판은 NaN).
+        out = {k: d[k].mean() for k, _, _ in spec if k in d.columns}
+        out["gank_rate"] = d["first_gank_min"].notna().mean()
+        out["counter_jungled_rate"] = d["first_counter_jungled_min"].notna().mean()
+        return out
 
     body = [f"정글 **{len(jg)}판** · 승률 **{pct(jg['win'].mean())}**\n"]
     body.append(
         table(["항목", "나", "SILVER 벤치", "GOLD 벤치"],
               cmp_rows(jagg(jg), jagg(bench_slice(df, "SILVER")), jagg(bench_slice(df, "GOLD")), spec))
+    )
+    body.append(
+        "\n- 첫 갱 = 3분 이후 **라인(탑/미드/봇)** 에서 내가 딴 첫 킬/어시. "
+        "정글·강에서 난 교전과 내 데스는 세지 않는다.\n"
+        "- 첫 카정 피해 = **내 정글에서 내가 죽은** 첫 시각(시간 하한 없음, 초반 인베이드 포함).\n"
+        "- 두 지표의 평균은 실제로 일어난 판만 대상이므로, 옆의 '판 비율'과 같이 봐야 한다.\n"
     )
     return "\n".join(body)
 

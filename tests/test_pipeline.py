@@ -138,15 +138,17 @@ def main() -> int:
                   "vision_per_min", "first_control_ward_min", "deaths_before_15",
                   "deaths_warded", "deaths_unwarded", "obj_team_total", "obj_participated",
                   "obj_participation", "first_full_clear_min", "first_gank_min",
-                  "jg_gold_diff_10", "enemy_jungle_minutes", "first_core_item_min",
+                  "first_counter_jungled_min", "jg_gold_diff_10", "enemy_jungle_minutes", "first_core_item_min",
                   "first_core_item_id", "back_count", "voluntary_back_count", "back_times_json"):
             print(f"    {k:24} = {m[k]}")
 
         check("정글로 인식", m["is_jungle"] == 1)
         check("첫 풀캠프 ~2.9분", 2.5 <= m["first_full_clear_min"] <= 3.2, str(m["first_full_clear_min"]))
-        # 사양: "3분 이후 적 챔프 근처 첫 킬/어시 또는 데스" → 3.4분 데스가 4.2분 킬보다 먼저다.
-        check("첫 갱(=3분 이후 첫 교전 관여) 3.4분", abs(m["first_gank_min"] - 3.4) < 0.01,
-              str(m["first_gank_min"]))
+        # 첫 갱 = 3분 이후 라인 구역에서 내가 딴 첫 킬/어시 → 4.2분 탑 킬.
+        # 3.4분 내정글 데스는 첫 갱이 아니라 "첫 카정 피해"로 분리된다.
+        check("첫 갱 4.2분(탑 킬)", abs(m["first_gank_min"] - 4.2) < 0.01, str(m["first_gank_min"]))
+        check("첫 카정 피해 3.4분(내정글 데스)",
+              abs(m["first_counter_jungled_min"] - 3.4) < 0.01, str(m["first_counter_jungled_min"]))
         check("적정글 체류 2분", m["enemy_jungle_minutes"] == 2, str(m["enemy_jungle_minutes"]))
         check("라인 상대 골드차 > 0", m["gold15_diff"] > 0, str(m["gold15_diff"]))
         check("코어템 = 월식(6692) 11.0분", m["first_core_item_id"] == 6692 and abs(m["first_core_item_min"] - 11.0) < 0.01,
