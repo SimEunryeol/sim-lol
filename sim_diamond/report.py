@@ -410,6 +410,15 @@ def s_trend(me: pd.DataFrame) -> str:
     return "\n".join(out)
 
 
+def s_coach(conn: sqlite3.Connection) -> str:
+    from .coach import latest_memo
+    m = latest_memo(conn)
+    if not m:
+        return ("> 아직 생성되지 않았다. `python -m sim_diamond.coach` 로 만든다 "
+                "(.env 에 ANTHROPIC_API_KEY 필요).\n")
+    return (f"_{m['created_at'][:10]} · {m['model']} 생성_\n\n{m['memo']}\n")
+
+
 def s_notes(static: Static) -> str:
     return (
         "- 와드 위치: 타임라인의 `WARD_PLACED` 이벤트에는 좌표가 없다. 설치자의 그 시각 위치"
@@ -428,7 +437,7 @@ f"같은 계산의 반경만 바꾼 값이다. 본인 좌표도 근사값이며,
 
 
 # ------------------------------------------------------------------ 진입 --
-def build(conn: sqlite3.Connection) -> str:
+def build(conn: sqlite3.Connection, include_memo: bool = True) -> str:
     metrics, deaths = load(conn)
     static = Static(conn)
     mastery = load_mastery(conn)
@@ -464,7 +473,7 @@ def build(conn: sqlite3.Connection) -> str:
         "\n## 6. 시간 흐름 (월별)\n",
         s_trend(me),
         "\n## 7. 코치 메모\n",
-        "> TODO: 다음 단계에서 Claude API 로 생성 예정.\n",
+        s_coach(conn) if include_memo else "> (생성 중)\n",
         "\n---\n\n### 계산 방식 주석\n",
         s_notes(static),
     ]

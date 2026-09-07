@@ -144,13 +144,24 @@ CREATE TABLE IF NOT EXISTS deaths_detail (
 -- 탐색/집중 단계. 단계마다 어떤 라인을 어떤 챔프로 몇 판 할지 정한다.
 CREATE TABLE IF NOT EXISTS phases (
     phase_name  TEXT NOT NULL,
-    start_date  TEXT NOT NULL,   -- YYYY-MM-DD (KST). 이 날짜 00:00 KST 이후 경기가 대상
+    start_date  TEXT NOT NULL,   -- YYYY-MM-DD (KST), 표시용
+    start_ts    INTEGER,         -- epoch ms. 이 시각 "이후" 경기만 탐색에 집계한다
     role        TEXT NOT NULL,   -- TOP / JUNGLE / MIDDLE / BOTTOM / UTILITY
     champs      TEXT NOT NULL,   -- json 배열: 기준 챔프 이름(영문 championName)
     target_games INTEGER NOT NULL DEFAULT 15,
     end_date    TEXT,
     created_at  TEXT,
     PRIMARY KEY (phase_name, role)
+);
+
+-- Claude API 로 생성한 코치 메모
+CREATE TABLE IF NOT EXISTS coach_memo (
+    created_at  TEXT PRIMARY KEY,
+    report_date TEXT,
+    model       TEXT,
+    memo        TEXT NOT NULL,
+    input_tokens  INTEGER,
+    output_tokens INTEGER
 );
 
 -- 경기별 자기 평가(재미 점수). 지표만으로는 안 잡히는 걸 남긴다.
@@ -275,8 +286,22 @@ def init_db(conn: sqlite3.Connection) -> None:
         "CREATE INDEX IF NOT EXISTS idx_metrics_pos ON participant_metrics(team_position)"
     )
     _migrate_metrics(conn)
+    _migrate_phases(conn)
     _cleanup_legacy(conn)
     conn.commit()
+
+
+def _migrate_phases(conn: sqlite3.Connection) -> None:
+    """예전 DB 의 phases 에 start_ts 를 붙이고, 없으면 start_date 00:00 KST 로 채운다."""
+    have = {r["name"] for r in conn.execute("PRAGMA table_info(phases)")}
+    if "start_ts" not in have:
+        conn.execute("ALTER TABLE phases ADD COLUMN start_ts INTEGER")
+    conn.execute("""
+        UPDATE phases SET start_ts = CAST(
+            (julianday(start_date || ' 00:00:00') - julianday('1970-01-01')) * 86400000 - 32400000
+            AS INTEGER)
+        WHERE start_ts IS NULL
+    """)
 
 
 def _cleanup_legacy(conn: sqlite3.Connection) -> None:
@@ -382,7 +407,7 @@ def counts(conn: sqlite3.Connection) -> dict[str, int]:
     tables = [
         "players", "matches_raw", "timelines_raw", "matches", "participants",
         "frames", "events", "participant_metrics", "deaths_detail", "champion_mastery",
-        "phases", "self_rating",
+        "phases", "self_rating", "coach_memo",
     ]
     out = {}
     for t in tables:

@@ -162,6 +162,7 @@ sim_diamond/
   rate.py           경기별 재미 점수 기록 (self_rating 테이블)
   explore.py        탐색 진행 현황 · 적합도 계산
   report.py         마크다운 리포트 생성
+  coach.py          코치 메모 생성 (Claude API)
   check.py          수집 데이터 점검
   doctor.py         .env / API 키 진단
 data/               sim.db, 리포트
@@ -202,6 +203,7 @@ tests/              합성 픽스처 + 전 구간 자체 검증
 | `champion_mastery` | 숙련도 top 20 |
 | `phases` | 탐색/집중 단계: 단계명, 시작일, 라인, 기준 챔프(json), 목표 판수 |
 | `self_rating` | 경기별 재미 점수(1~5)와 메모 |
+| `coach_memo` | Claude API 로 생성한 코치 메모 |
 | `static_data` | Data Dragon 캐시 |
 | `collect_state` | 수집 진행 상태 |
 
@@ -238,6 +240,30 @@ Riot 타임라인이 주지 않는 정보라 추정한 값이다. 리포트 하�
 **리메이크 제외**: 5분 미만으로 끝난 판은 리포트의 모든 집계에서 뺀다. 74초짜리 패배 한 판이
 20판 표본의 승률을 5%p 흔들기 때문이다. 제외한 판수는 리포트 요약에 표시된다.
 
+## 코치 메모 (2단계)
+
+리포트 7번 섹션을 Claude API 로 채운다. `.env` 에 `ANTHROPIC_API_KEY` 가 필요하다.
+
+```bat
+python -m sim_diamond.coach --dry-run   REM 프롬프트만 확인 (API 호출 없음, 무료)
+python -m sim_diamond.coach             REM 생성 → DB 저장 → 리포트 갱신
+python -m sim_diamond.coach --show      REM 저장된 최신 메모 보기
+```
+
+모델은 `claude-opus-5`, adaptive thinking + effort high. 리포트 전문을 입력으로 준다.
+생성된 메모는 `coach_memo` 테이블에 남고, 이후 `report` 를 다시 돌려도 7번 섹션에 실린다.
+
+시스템 프롬프트에 박아둔 규칙:
+
+1. **탐색 75판이 끝나기 전에는 어떤 라인도 추천하지 않는다.** 남은 판수를 명시하고
+   라인 판단은 유보한다고 쓰게 한다.
+2. 표본 15판 미만(⚠) 라인으로 결론 내지 않는다.
+3. `_(추정)_` 지표는 추정임을 밝히고, 절대 수치보다 벤치와의 차이를 근거로 삼는다.
+4. 모든 주장에 리포트의 실제 숫자를 붙이고, 없는 수치를 지어내지 않는다.
+
+출력은 한 줄 요약 / 탐색 단계 진행 현황 / 지금 고칠 것 3개 / 다음 15판에서 확인할 것 /
+주의 순서다.
+
 ## 다음 단계
 
-리포트 7번 "코치 메모" 섹션은 TODO 로 비어 있다. 2단계에서 Claude API 로 채운다.
+와드 좌표 실측(리플레이 파싱), 탐색 75판 완료 후 라인 결정, 결정된 라인의 집중 단계.

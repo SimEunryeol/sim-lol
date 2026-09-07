@@ -246,9 +246,22 @@ def main() -> int:
         phase.add_phase(conn, "탐색", "JUNGLE", ["Rammus"], 15, "2026-01-01")
         conn.commit()
         viol = next(r for r in explore.summarize(conn)["reports"] if r["role"] == "JUNGLE")
-        check("기준 챔프 외 플레이 = 위반으로 집계",
-              viol["violations"] == 11 and viol["violation_champs"] == ["LeeSin"],
-              f"{viol['violations']} {viol['violation_champs']}")
+        check("기준 챔프 외 플레이 = 위반으로 집계, 진행 판수에서 제외",
+              viol["violations"] == 11 and viol["violation_champs"] == ["LeeSin"]
+              and viol["games"] == 0 and viol["played_total"] == 11,
+              f"위반 {viol['violations']} 진행 {viol['games']} 총 {viol['played_total']}")
+        phase.add_phase(conn, "탐색", "JUNGLE", ["LeeSin"], 15, "2026-01-01")
+        conn.commit()
+
+        # 단계 시작 시각을 뒤로 밀면 그 이전 경기는 탐색에서 빠져야 한다
+        mid = conn.execute("SELECT game_start FROM participant_metrics WHERE puuid=? "
+                           "AND team_position='JUNGLE' ORDER BY game_start", (ME,)).fetchall()
+        cut = mid[5]["game_start"]
+        phase.add_phase(conn, "탐색", "JUNGLE", ["LeeSin"], 15, "2026-01-01", start_ts=cut)
+        conn.commit()
+        after = next(r for r in explore.summarize(conn)["reports"] if r["role"] == "JUNGLE")
+        check("시작 시각 이전 경기는 탐색에서 제외", after["games"] == 11 - 5,
+              f"{after['games']} (전체 11판 중 6번째부터)")
         phase.add_phase(conn, "탐색", "JUNGLE", ["LeeSin"], 15, "2026-01-01")
         conn.commit()
 
@@ -272,7 +285,18 @@ def main() -> int:
         check("벤치 SILVER 열", "SILVER 벤치" in text)
         check("벤치 GOLD 열", "GOLD 벤치" in text)
         check("한글 챔피언 이름", "리 신" in text)
-        check("코치 메모 TODO", "TODO" in text)
+        check("코치 메모 미생성 안내", "python -m sim_diamond.coach" in text)
+        # 메모가 저장되면 리포트 7번에 실제로 실린다
+        from sim_diamond import coach  # noqa: E402
+        coach.save(conn, "테스트 메모 본문", "claude-opus-5", 100, 200)
+        conn.commit()
+        text2 = report.build(conn)
+        check("저장된 코치 메모가 리포트에 실림", "테스트 메모 본문" in text2)
+        check("메모 없는 리포트도 만들 수 있음(코치 입력용)",
+              "테스트 메모 본문" not in report.build(conn, include_memo=False))
+        check("코치 프롬프트에 75판 규칙 명시", "75판" in coach.SYSTEM_PROMPT)
+        check("코치 프롬프트에 추정 지표 주의", "_(추정)_" in coach.SYSTEM_PROMPT)
+        check("코치 프롬프트에 탐색 진행 현황 항목", "탐색 단계 진행 현황" in coach.SYSTEM_PROMPT)
         print(f"  리포트 {len(text.encode('utf-8'))} bytes → {args.report}")
 
     if not args.keep:

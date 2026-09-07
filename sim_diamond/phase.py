@@ -28,9 +28,17 @@ def today_kst() -> str:
     return datetime.now(config.KST).strftime("%Y-%m-%d")
 
 
-def add_phase(conn, name: str, role: str, champs: list[str], target: int, start: str) -> None:
+def add_phase(conn, name: str, role: str, champs: list[str], target: int,
+              start: str, start_ts: int | None = None) -> None:
+    """start_ts 는 epoch ms. 안 주면 start_date 00:00 KST 로 잡는다.
+
+    init-explore 는 '실행한 그 시각'을 넘긴다 — 그 전에 한 경기는 탐색이 아니기 때문이다.
+    """
+    if start_ts is None:
+        start_ts = int(datetime.strptime(start, "%Y-%m-%d")
+                       .replace(tzinfo=config.KST).timestamp() * 1000)
     upsert(conn, "phases", {
-        "phase_name": name, "start_date": start, "role": role.upper(),
+        "phase_name": name, "start_date": start, "start_ts": start_ts, "role": role.upper(),
         "champs": json.dumps(champs, ensure_ascii=False), "target_games": target,
         "end_date": None, "created_at": now_iso(),
     }, ["phase_name", "role"])
@@ -63,13 +71,15 @@ def _print(conn, static: Static) -> None:
     if not rows:
         print("등록된 단계가 없습니다. `python -m sim_diamond.phase init-explore` 로 시작하세요.")
         return
-    print(f"{'단계':<8} {'라인':<6} {'시작일':<12} {'목표':>4}  기준 챔프")
-    print("-" * 72)
+    print(f"{'단계':<8} {'라인':<6} {'시작 시각(KST)':<17} {'목표':>4}  기준 챔프")
+    print("-" * 78)
     for p in rows:
         champs = ", ".join(json.loads(p["champs"]))
         end = f"  (종료 {p['end_date']})" if p["end_date"] else ""
+        started = datetime.fromtimestamp((p["start_ts"] or 0) / 1000,
+                                         config.KST).strftime("%Y-%m-%d %H:%M")
         print(f"{p['phase_name']:<8} {ROLE_KO.get(p['role'], p['role']):<6} "
-              f"{p['start_date']:<12} {p['target_games']:>4}  {champs}{end}")
+              f"{started:<17} {p['target_games']:>4}  {champs}{end}")
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -107,13 +117,18 @@ def main(argv: list[str] | None = None) -> int:
     with session(st.db_path) as conn:
         static = Static(conn)
         if args.cmd == "init-explore":
+            now = datetime.now(config.KST)
             start = args.start or today_kst()
+            # --start 를 명시하면 그 날 00:00 KST 부터, 아니면 지금 이 순간부터 센다.
+            start_ts = None if args.start else int(now.timestamp() * 1000)
             for role in ROLES:
                 champs = getattr(args, role.lower()) or []
-                add_phase(conn, args.name, role, champs, args.games, start)
+                add_phase(conn, args.name, role, champs, args.games, start, start_ts)
             conn.commit()
-            print(f"'{args.name}' 단계를 {start} 시작으로 5개 라인에 만들었습니다 "
+            when = args.start or f"{now:%Y-%m-%d %H:%M} KST(지금)"
+            print(f"'{args.name}' 단계를 {when} 이후로 5개 라인에 만들었습니다 "
                   f"(라인당 {args.games}판, 총 {args.games * len(ROLES)}판).")
+            print("  이 시각 이전 경기와 기준 챔프가 아닌 경기는 탐색 진행 판수에 안 들어갑니다.")
             empty = [ROLE_KO[r] for r in ROLES if not getattr(args, r.lower())]
             if empty:
                 print(f"  ! 기준 챔프를 아직 안 정한 라인: {', '.join(empty)}")
