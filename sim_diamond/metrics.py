@@ -21,7 +21,10 @@ from .ddragon import CONTROL_WARD_ID, Static
 WARD_LOOKBACK_MS = 60_000      # 데스 직전 이 시간 안에 설치된 아군 와드만 본다
 WARD_RADIUS = 1500.0
 OBJECTIVE_RADIUS = 2500.0
-FULL_CLEAR_JUNGLE_CS = 12      # 첫 풀캠프 완료 근사 기준
+# 첫 풀캠프 완료 근사 기준(정글 몬스터 처치 수).
+# 6캠프 전체는 두꺼비1 + 블루1 + 늑대3 + 칼날부리6 + 레드1 + 돌거북7 ≈ 20마리다.
+# 12 로 두면 실측상 2분에 걸리는데(= 3~4캠프) 풀클리어는 3분 15초 이후다.
+FULL_CLEAR_JUNGLE_CS = 20
 FIRST_GANK_AFTER_MS = 180_000
 LANE_ZONES = {"TOP", "MID", "BOT"}   # 첫 갱으로 인정하는 구역
 BACK_CLUSTER_GAP_MS = 20_000   # 이 간격보다 벌어지면 다른 상점 방문으로 본다

@@ -143,7 +143,9 @@ def main() -> int:
             print(f"    {k:24} = {m[k]}")
 
         check("정글로 인식", m["is_jungle"] == 1)
-        check("첫 풀캠프 ~2.9분", 2.5 <= m["first_full_clear_min"] <= 3.2, str(m["first_full_clear_min"]))
+        # 정글 CS 곡선 3분=16, 4분=22 → 임계값 20 을 3.67분에 넘는다
+        check("첫 풀캠프 3.67분(보간)", abs(m["first_full_clear_min"] - 3.67) < 0.02,
+              str(m["first_full_clear_min"]))
         # 첫 갱 = 3분 이후 라인 구역에서 내가 딴 첫 킬/어시 → 4.2분 탑 킬.
         # 3.4분 내정글 데스는 첫 갱이 아니라 "첫 카정 피해"로 분리된다.
         check("첫 갱 4.2분(탑 킬)", abs(m["first_gank_min"] - 4.2) < 0.01, str(m["first_gank_min"]))

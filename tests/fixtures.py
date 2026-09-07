@@ -48,6 +48,16 @@ DDRAGON_ITEMS = {
 }
 
 
+# 실제 정글 클리어 곡선에 가깝게: 캠프는 1:30 에 생기고 첫 6캠프(≈20마리)는 3~4분에 끝난다.
+_JUNGLE_CURVE = {0: 0, 1: 0, 2: 8, 3: 16, 4: 22, 5: 25}
+
+
+def _jungle_cs(minute: int) -> int:
+    if minute in _JUNGLE_CURVE:
+        return _JUNGLE_CURVE[minute]
+    return _JUNGLE_CURVE[5] + (minute - 5) * 3
+
+
 def _pos(x: int, y: int) -> dict:
     return {"x": int(x), "y": int(y)}
 
@@ -156,7 +166,7 @@ def make_match(
                 "participantId": p["participantId"],
                 "position": _pos(hx + jitter, hy + jitter),
                 "minionsKilled": 0 if is_jg else int(minute * 7.0 * edge),
-                "jungleMinionsKilled": int(minute * 4.2) if is_jg else 0,
+                "jungleMinionsKilled": _jungle_cs(minute) if is_jg else 0,
                 "totalGold": int(500 + minute * 300 * edge),
                 "currentGold": rng.randint(0, 900),
                 "level": min(18, 1 + int(minute * 0.55)),

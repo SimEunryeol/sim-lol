@@ -205,11 +205,44 @@ def jungle_calibration(conn: sqlite3.Connection) -> None:
         f"{sorted(v)[len(v) // 2]:>4}" for _, v in sorted(by_min.items())))
     hit = next((m for m in sorted(by_min)
                 if sorted(by_min[m])[len(by_min[m]) // 2] >= metrics.FULL_CLEAR_JUNGLE_CS), None)
-    print(f"    → 중앙값이 {metrics.FULL_CLEAR_JUNGLE_CS} 를 넘는 시점: {hit}분")
+    print(f"    → 중앙값이 임계값 {metrics.FULL_CLEAR_JUNGLE_CS} 를 넘는 시점: {hit}분")
     if hit is not None and hit <= 2:
         warn(f"정글 CS 가 {hit}분에 벌써 임계값 {metrics.FULL_CLEAR_JUNGLE_CS} 를 넘습니다 — "
-             f"첫 풀캠프(6캠프)는 보통 3분 15초쯤이므로 임계값이 너무 낮습니다. "
-             f"metrics.FULL_CLEAR_JUNGLE_CS 를 올려야 합니다.")
+             f"첫 풀캠프(6캠프)는 보통 3분 15초쯤이므로 임계값이 너무 낮습니다.")
+
+    # 중앙값만 보면 판마다 다른 클리어 순서가 뭉개진다. 개별 판을 그대로 보여준다.
+    games = [r["match_id"] for r in conn.execute("""
+        SELECT match_id FROM participant_metrics
+        WHERE puuid = ? AND is_jungle = 1 ORDER BY game_start DESC LIMIT 3
+    """, (me["puuid"],))]
+    if games:
+        print("\n    개별 판 (분당 누적 정글 CS):")
+        print("           " + "".join(f"{m:>5}" for m in range(9)) + "   프레임간격")
+        for mid in games:
+            cs = {r["minute"]: r["jungle_cs"] for r in conn.execute(
+                "SELECT minute, jungle_cs FROM frames WHERE match_id=? AND puuid=? AND minute<=8",
+                (mid, me["puuid"]))}
+            interval = _frame_interval(conn, mid)
+            print(f"    {mid[-6:]:>6} " + "".join(f"{cs.get(m, '-'):>5}" for m in range(9))
+                  + f"   {interval}")
+
+
+def _frame_interval(conn: sqlite3.Connection, match_id: str) -> str:
+    """타임라인 프레임 간격이 정말 60초인지 원본에서 확인한다(아니면 분 매핑이 깨진다)."""
+    from .db import load_raw
+    tl = load_raw(conn, "timelines_raw", match_id)
+    if not isinstance(tl, dict):
+        return "?"
+    info = tl.get("info") or {}
+    declared = info.get("frameInterval")
+    frames = info.get("frames") or []
+    if len(frames) >= 3:
+        gaps = [frames[i + 1]["timestamp"] - frames[i]["timestamp"] for i in range(2)]
+        actual = f"실측 {gaps[0]}/{gaps[1]}ms"
+    else:
+        actual = "프레임 부족"
+    flag = "" if declared == 60000 else "  ← 60000 아님 ★"
+    return f"선언 {declared}ms, {actual}{flag}"
 
 
 def event_types(conn: sqlite3.Connection) -> None:
