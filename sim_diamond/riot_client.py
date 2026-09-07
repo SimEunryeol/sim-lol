@@ -101,12 +101,13 @@ class Stats:
     retries_429: int = 0
     retries_5xx: int = 0
     errors: int = 0
+    handled: int = 0   # allow_error=True 로 의도적으로 받아넘긴 4xx/5xx
 
     def summary(self) -> str:
         return (
             f"API 호출 {self.calls}회 / 캐시 히트 {self.cache_hits}회 / "
             f"429 재시도 {self.retries_429}회 / 5xx 재시도 {self.retries_5xx}회 / "
-            f"실패 {self.errors}회"
+            f"실패 {self.errors}회" + (f" / 예상된 오류 {self.handled}회" if self.handled else "")
         )
 
 
@@ -215,9 +216,10 @@ class RiotClient:
                 n_5xx += 1
                 self.stats.retries_5xx += 1
                 if n_5xx > config.MAX_5XX_RETRIES:
-                    self.stats.errors += 1
                     if allow_error:
+                        self.stats.handled += 1
                         return self._error_payload(resp)
+                    self.stats.errors += 1
                     raise RiotError(resp.status_code, url, resp.text)
                 self._log(f"  {resp.status_code} → {backoff:.0f}s 후 재시도 ({n_5xx}/{config.MAX_5XX_RETRIES})")
                 time.sleep(backoff)
@@ -225,12 +227,13 @@ class RiotClient:
                 continue
 
             # 4xx
-            self.stats.errors += 1
             if allow_error:
+                self.stats.handled += 1
                 payload = self._error_payload(resp)
                 if use_cache:
                     self._cache_put(key, resp.status_code, payload)
                 return payload
+            self.stats.errors += 1
             if resp.status_code == 404:
                 raise NotFound(404, url, resp.text)
             raise RiotError(resp.status_code, url, resp.text)

@@ -250,7 +250,13 @@ def init_db(conn: sqlite3.Connection) -> None:
         "CREATE INDEX IF NOT EXISTS idx_metrics_pos ON participant_metrics(team_position)"
     )
     _migrate_metrics(conn)
+    _cleanup_legacy(conn)
     conn.commit()
+
+
+def _cleanup_legacy(conn: sqlite3.Connection) -> None:
+    """예전 버전이 matches_raw 에 잘못 넣은 replays 탐색 결과를 치운다."""
+    conn.execute("DELETE FROM matches_raw WHERE match_id LIKE '\_\_replays\_probe\_\_%' ESCAPE '\\'")
 
 
 def _migrate_metrics(conn: sqlite3.Connection) -> list[str]:

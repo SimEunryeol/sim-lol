@@ -181,9 +181,12 @@ def reparse_all(conn: sqlite3.Connection, match_ids: Iterable[str] | None = None
     n_m = n_t = 0
     for mid in match_ids:
         raw = load_raw(conn, "matches_raw", mid)
-        if raw:
+        if isinstance(raw, dict) and "info" in raw and "participants" in raw["info"]:
             store_match(conn, raw)
             n_m += 1
+        elif raw is not None:
+            print(f"  ! {mid} 는 매치 JSON 이 아니라 건너뜁니다")
+            continue
         tl = load_raw(conn, "timelines_raw", mid)
         if tl:
             store_timeline(conn, tl, mid)

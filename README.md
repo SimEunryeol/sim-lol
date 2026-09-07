@@ -67,6 +67,34 @@ python -m sim_diamond.doctor        REM Windows: scripts\doctor.bat
 그리고 라이엇이 **실제로** 어떤 상태코드와 본문을 돌려주는지 그대로 보여준다.
 `HTTP 401 / 403` 은 거의 항상 **개발용 키 만료**다 — 24시간마다 새로 발급받아야 한다.
 
+## 수집한 데이터 점검
+
+```bat
+python -m sim_diamond.check              REM 요약 + 이상 징후
+python -m sim_diamond.check --sample     REM 최근 한 경기 상세
+```
+
+지표가 통째로 비었는지(파싱 실패), 값이 물리적으로 불가능한지, 타임라인 데스 수와 매치 스탯의
+데스 수가 어긋나는지 등을 점검한다. 이상 징후가 있으면 종료코드 1 을 낸다.
+
+## Match-V5 `/replays` (2026-09 KR 확인)
+
+문서에 없는 엔드포인트라 `collect_me` 가 후보 경로를 찔러본다. 실제 응답:
+
+| 경로 | 결과 |
+| --- | --- |
+| `asia` `/lol/match/v5/matches/by-puuid/{puuid}/replays` | **200** |
+| `asia` `/lol/match/v5/replays/by-puuid/{puuid}` | 403 |
+
+```json
+{"total": 5, "matchFileURLs": ["https://s3.ap-northeast-1.amazonaws.com/…/kr_8369802379/0.replay?X-Amz-Expires=3600&…"]}
+```
+
+- 서명된 S3 링크이고 **1시간 뒤 만료**된다. 쓰려면 받은 즉시 내려받아야 한다.
+- **최근 5판만** 준다. 시즌 전체 소급은 안 된다.
+- 내용은 `.replay`(ROFL) 파일이라 별도 파서가 필요하다. 다만 여기엔 와드의 **정확한 좌표**가
+  들어 있어서, 지금 근사로 처리 중인 항목을 실측으로 바꿀 수 있는 유일한 경로다.
+
 ## 네트워크 없이 검증
 
 합성 Riot 응답으로 파싱 → 지표 → 리포트 전 구간을 돌린다. API 키가 없어도 된다.

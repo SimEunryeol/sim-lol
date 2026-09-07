@@ -57,14 +57,17 @@ def all_match_ids(client: RiotClient, puuid: str, start_time_s: int, queue: int 
     ids: list[str] = []
     start = 0
     while True:
-        page = client.match_ids(puuid, start=start, count=page_size, queue=queue, start_time=start_time_s)
+        want = page_size if not max_matches else min(page_size, max_matches - len(ids))
+        if want <= 0:
+            break
+        page = client.match_ids(puuid, start=start, count=want, queue=queue, start_time=start_time_s)
         if not page:
             break
         ids.extend(page)
         print(f"  매치 ID {len(ids)}개 수집…", flush=True)
-        if len(page) < page_size:
+        if len(page) < want:
             break
-        start += page_size
+        start += want
         if max_matches and len(ids) >= max_matches:
             break
     if max_matches:
@@ -152,7 +155,12 @@ def probe_replays(client: RiotClient, conn, puuid: str) -> dict:
         if status == 200:
             break
     record = {"probed_at": now_iso(), "puuid": puuid, "results": results}
-    save_raw(conn, "matches_raw", f"__replays_probe__{puuid[:8]}", record)
+    # matches_raw 에 넣으면 reparse_all 이 이걸 매치로 착각한다. 별도 보관.
+    conn.execute(
+        "INSERT INTO static_data (key, json, fetched_at) VALUES (?, ?, ?) "
+        "ON CONFLICT(key) DO UPDATE SET json=excluded.json, fetched_at=excluded.fetched_at",
+        (f"replays_probe:{puuid[:12]}", json.dumps(record, ensure_ascii=False), now_iso()),
+    )
     conn.commit()
 
     print("\n[replays 엔드포인트 탐색 결과]")
