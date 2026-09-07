@@ -3,102 +3,143 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>sim-diamond 대시보드</title>
+<title>심은렬 다이아만들기</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
 <style>
+  /* 색 두 개가 이 프로젝트의 서사다. 구리 = 지금(브론즈), 청록 = 목표(다이아).
+     액센트를 여기저기 뿌리지 않고 이 축에만 쓴다. */
   :root{
-    --bg:#0e1116; --panel:#161b22; --panel2:#1c232c; --line:#2a323d;
-    --fg:#e6edf3; --dim:#8b98a5; --accent:#4b9fff; --good:#3fb950; --bad:#f85149;
-    --warn:#d29922;
+    --bg:#0a0c0f; --panel:#0f1216; --panel2:#12161b; --line:#232a33; --line2:#1c2027;
+    --fg:#e9ecef; --fg2:#a8b0bb; --dim:#7c8490; --dim2:#5a626d; --faint:#3d444e;
+    --bronze:#c88a4a; --bronze-t:#d9a877;
+    --dia:#6fd3e8; --dia-t:#8fdff0;
+    --win:#5fd08a; --lose:#f0736a; --lose-t:#f0a58a;
   }
   *{box-sizing:border-box}
-  body{margin:0;background:var(--bg);color:var(--fg);
-       font:14px/1.6 "Malgun Gothic","맑은 고딕",system-ui,sans-serif}
-  header{display:flex;align-items:baseline;gap:12px;padding:14px 20px;
-         border-bottom:1px solid var(--line);background:var(--panel)}
-  header h1{font-size:16px;margin:0;font-weight:700}
-  header .who{color:var(--dim);font-size:13px}
-  nav{display:flex;gap:4px;padding:0 20px;background:var(--panel);
-      border-bottom:1px solid var(--line)}
-  nav button{background:none;border:0;border-bottom:2px solid transparent;color:var(--dim);
-             padding:10px 16px;font:inherit;cursor:pointer}
-  nav button.on{color:var(--fg);border-bottom-color:var(--accent)}
-  main{padding:20px;max-width:1100px}
-  section{display:none} section.on{display:block}
-  .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;
-        padding:16px;margin-bottom:16px}
-  .card h2{margin:0 0 12px;font-size:15px}
-  .muted{color:var(--dim)}
-  .err{color:var(--bad)}
+  html{background:var(--bg)}
+  body{margin:0;color:var(--fg);font:14px/1.6 "IBM Plex Sans KR","Malgun Gothic",system-ui,sans-serif;
+       -webkit-font-smoothing:antialiased;
+       background:
+         radial-gradient(900px 420px at 12% -8%, #16232b 0%, rgba(10,12,15,0) 62%),
+         radial-gradient(700px 380px at 96% 4%, #1b1726 0%, rgba(10,12,15,0) 58%),
+         var(--bg);
+       background-attachment:fixed}
+  .mono{font-family:"IBM Plex Mono",Consolas,monospace;font-variant-numeric:tabular-nums}
+  a{color:#7fd8ec} a:hover{color:#a8e6f4}
 
-  /* 기준 챔프 카드 — 스플래시를 배경으로 깔고 어둡게 처리한다.
-     지금은 이미지가 없어 플레이스홀더 그라데이션이 그 자리를 대신한다. */
-  .champs{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-  .champ-card{position:relative;overflow:hidden;border-radius:10px;
-              border:1px solid var(--line);min-height:120px;display:flex;
-              align-items:center;gap:14px;padding:16px}
-  .champ-card .splash{position:absolute;inset:0;background-size:cover;
-                      background-position:center 22%;
-                      /* 배경 위에 글자가 읽히도록 어둡게 */
-                      filter:brightness(.35) saturate(.85)}
-  .champ-card .splash.ph{background:
-      linear-gradient(135deg,#243447 0%,#161b22 60%,#10141a 100%)}
-  .champ-card .splash.ph::after{content:attr(data-name);position:absolute;
-      right:10px;bottom:4px;font-size:34px;font-weight:800;color:#ffffff12;
-      letter-spacing:1px;white-space:nowrap}
-  .champ-card > *{position:relative}
+  header{display:flex;align-items:center;justify-content:space-between;gap:20px;
+         padding:22px 40px 18px;border-bottom:1px solid var(--line2);flex-wrap:wrap}
+  .brand{display:flex;align-items:baseline;gap:14px}
+  .brand h1{font-size:17px;font-weight:700;letter-spacing:-.01em;margin:0}
+  .chip{display:flex;align-items:center;gap:7px;padding:5px 12px;border-radius:999px;
+        font-size:11.5px;letter-spacing:.06em;white-space:nowrap}
+  .chip.now{background:rgba(200,138,74,.10);border:1px solid rgba(200,138,74,.30);color:var(--bronze-t)}
+  .chip.goal{background:rgba(111,211,232,.08);border:1px solid rgba(111,211,232,.26);color:var(--dia-t)}
 
-  /* 챔프 아이콘 = 64px 원형. 이미지가 없으면 챔프명 텍스트 플레이스홀더. */
-  .champ-icon{width:64px;height:64px;border-radius:50%;flex:0 0 64px;
-              background:var(--panel2);border:1px solid var(--line);
-              display:flex;align-items:center;justify-content:center;
-              text-align:center;font-size:11px;line-height:1.15;color:var(--dim);
-              overflow:hidden;background-size:cover;background-position:center}
-  .champ-icon.sm{width:36px;height:36px;flex-basis:36px;font-size:9px}
-  .champ-name{font-weight:700;font-size:15px}
-  .champ-sub{color:#c8d3de;font-size:12px}
+  nav{display:flex;padding:0 40px;border-bottom:1px solid var(--line2)}
+  nav button{background:none;border:0;color:var(--dim);padding:13px 4px;margin-right:26px;
+             font:inherit;font-size:13.5px;cursor:pointer;box-shadow:inset 0 -2px 0 transparent}
+  nav button.on{color:var(--fg);font-weight:600;box-shadow:inset 0 -2px 0 var(--dia)}
 
-  /* 아이템 등 기타 이미지 자리 — 정사각형 플레이스홀더 */
-  .sq{width:40px;height:40px;border-radius:6px;background:var(--panel2);
-      border:1px solid var(--line);display:inline-flex;align-items:center;
-      justify-content:center;font-size:9px;color:var(--dim);text-align:center;
-      overflow:hidden;background-size:cover}
+  main{padding:26px 40px 44px;max-width:1360px}
+  section{display:none} section.on{display:flex;flex-direction:column;gap:22px}
+  .card{border-radius:14px;border:1px solid var(--line);background:var(--panel)}
+  .pad{padding:18px 24px}
+  .eyebrow{font-size:11px;font-weight:600;color:var(--dim);letter-spacing:.16em}
+  .muted{color:var(--dim)} .faint{color:var(--dim2)}
+  .err{color:var(--lose)}
+  .row{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+  .spread{display:flex;align-items:baseline;justify-content:space-between;gap:24px;flex-wrap:wrap}
 
-  .bar{height:8px;background:var(--panel2);border-radius:99px;overflow:hidden;margin:8px 0}
-  .bar > i{display:block;height:100%;background:var(--accent)}
-  .task{background:var(--panel2);border-left:3px solid var(--accent);
-        padding:10px 14px;border-radius:0 8px 8px 0}
-  table{border-collapse:collapse;width:100%;font-size:13px}
-  th,td{border-bottom:1px solid var(--line);padding:7px 8px;text-align:left;
-        vertical-align:middle}
-  th{color:var(--dim);font-weight:600}
-  td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
-  .pill{display:inline-block;padding:1px 8px;border-radius:99px;font-size:11px;
-        background:var(--panel2);color:var(--dim)}
-  .pill.now{background:#123a63;color:#9dcaff}
-  .win{color:var(--good)} .lose{color:var(--bad)}
-  .stars{display:inline-flex;gap:3px}
-  .stars button{width:24px;height:24px;border-radius:6px;border:1px solid var(--line);
-                background:var(--panel2);color:var(--dim);cursor:pointer;font:inherit;
-                font-size:12px;padding:0}
-  .stars button:hover{border-color:var(--accent);color:var(--fg)}
-  .stars button.on{background:var(--accent);border-color:var(--accent);color:#08121f;
-                   font-weight:700}
-  .md h1{font-size:19px;margin:18px 0 8px} .md h2{font-size:16px;margin:20px 0 8px}
-  .md h3{font-size:14px;margin:16px 0 6px;color:#c8d3de}
-  .md table{margin:8px 0 14px} .md p{margin:8px 0}
-  .md hr{border:0;border-top:1px solid var(--line);margin:18px 0}
-  .md code{background:var(--panel2);padding:1px 5px;border-radius:4px;font-size:12px}
-  .md ul,.md ol{margin:8px 0;padding-left:22px}
+  /* 기준 챔프 카드 — 스플래시를 배경으로 깔고 어둡게 처리한다 */
+  .champs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+  .champ-card{position:relative;overflow:hidden;border-radius:14px;border:1px solid var(--line);
+              min-height:172px;display:flex;align-items:center;gap:20px;padding:0 24px}
+  .champ-card .splash{position:absolute;inset:0;background-size:cover;background-position:center 30%;
+                      transform:scale(1.06);filter:blur(1px)}
+  .champ-card .veil{position:absolute;inset:0;
+       background:linear-gradient(90deg, rgba(10,12,15,.97) 0%, rgba(10,12,15,.88) 42%, rgba(10,12,15,.42) 100%)}
+  .champ-card .ph{background:linear-gradient(135deg,#243447 0%,#161b22 60%,#10141a 100%)}
+  .champ-card > .body{position:relative;display:flex;align-items:center;gap:20px}
+  .champ-name{font-size:22px;font-weight:700;letter-spacing:-.02em}
+
+  /* 챔프 아이콘 = 64px 원형 */
+  .ico{width:64px;height:64px;border-radius:50%;flex:0 0 64px;object-fit:cover;
+       background:var(--panel2);border:1px solid var(--line);
+       display:flex;align-items:center;justify-content:center;
+       font-size:11px;color:var(--dim);text-align:center;overflow:hidden}
+  .ico.cur{border:2px solid rgba(111,211,232,.45);box-shadow:0 0 0 4px rgba(111,211,232,.08)}
+  .ico.md{width:34px;height:34px;flex-basis:34px;font-size:9px}
+  .ico.sm{width:30px;height:30px;flex-basis:30px;font-size:9px}
+  .ico.dim{opacity:.72}
+
+  .bar{height:6px;border-radius:999px;background:#171b21;overflow:hidden;position:relative;flex-grow:1}
+  .bar>i{display:block;height:100%;border-radius:999px;background:linear-gradient(90deg,var(--bronze),#e0a86a)}
+  .bar .ghost{position:absolute;inset:0;background:linear-gradient(90deg,var(--bronze),var(--dia));opacity:.14}
+  .bar.thin{height:5px}
+  .bar.thin>i{background:var(--dia)}
+
+  .task{border-radius:14px;border:1px solid rgba(111,211,232,.26);
+        background:linear-gradient(180deg, rgba(111,211,232,.055), rgba(111,211,232,.015));padding:20px 24px}
+  .tick{width:3px;height:13px;border-radius:2px;background:var(--dia);display:inline-block}
+
+  table{border-collapse:collapse;width:100%}
+  th{font-size:10.5px;color:var(--dim2);letter-spacing:.1em;font-weight:500;text-align:left;
+     padding:0 8px 9px;border-bottom:1px solid var(--line2)}
+  td{padding:11px 8px;border-bottom:1px solid #15191e;font-size:13.5px;vertical-align:middle}
+  tr:last-child td{border-bottom:0}
+  .num{text-align:right}
+  .pill{display:inline-block;padding:2px 7px;border-radius:5px;font-size:10px;white-space:nowrap}
+  .pill.cur{background:rgba(111,211,232,.13);color:var(--dia-t)}
+  .pill.warn{background:rgba(200,138,74,.12);color:var(--bronze-t)}
+
+  .stars{display:flex;gap:5px;justify-content:flex-end}
+  .stars button{width:29px;height:29px;border-radius:8px;border:1px solid var(--line);
+                background:var(--panel2);color:var(--dim);font:inherit;font-size:12px;cursor:pointer;
+                font-family:"IBM Plex Mono",monospace}
+  .stars button:hover{border-color:var(--dia);color:var(--fg)}
+  .stars button.on{background:var(--dia);border-color:var(--dia);color:#07222a;font-weight:600}
+
+  .stats{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:14px}
+  .stat{border-radius:12px;border:1px solid var(--line2);background:var(--panel);padding:16px 18px}
+  .stat .k{font-size:11px;color:var(--dim);margin-bottom:9px}
+  .stat .v{font-size:27px;font-weight:600}
+  .stat .s{font-size:10.5px;color:var(--dim2);margin-top:6px}
+
+  .gap{display:grid;grid-template-columns:220px 1fr 160px;gap:22px;align-items:center}
+  .gbar{height:19px;border-radius:5px;background:var(--panel2);overflow:hidden;flex-grow:1}
+  .gbar>i{display:block;height:100%;border-radius:5px}
+
+  /* 리포트 마크다운 */
+  .md h1{font-size:20px;margin:22px 0 10px} .md h2{font-size:16px;margin:26px 0 10px}
+  .md h3{font-size:14px;margin:20px 0 8px;color:var(--fg2)}
+  .md p{margin:9px 0;color:var(--fg2)} .md li{color:var(--fg2)}
+  .md hr{border:0;border-top:1px solid var(--line2);margin:22px 0}
+  .md code{background:var(--panel2);padding:1px 6px;border-radius:4px;font-size:12px;
+           font-family:"IBM Plex Mono",monospace}
+  .md table{margin:10px 0 18px;font-size:12.5px}
+  .md td{padding:8px;font-size:12.5px}
+  .md em{color:var(--dim);font-style:normal;font-size:12px}
   .scroll{overflow-x:auto}
-  .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
   input[type=text]{background:var(--panel2);border:1px solid var(--line);color:var(--fg);
-                   border-radius:6px;padding:6px 10px;font:inherit;min-width:220px}
+                   border-radius:8px;padding:8px 12px;font:inherit;font-size:13px;min-width:300px}
+  input[type=text]::placeholder{color:var(--dim2)}
+  @media (max-width:900px){
+    header,nav,main{padding-left:18px;padding-right:18px}
+    .champs{grid-template-columns:1fr} .stats{grid-template-columns:repeat(2,1fr)}
+    .gap{grid-template-columns:1fr}
+  }
 </style>
 </head>
 <body>
 <header>
-  <h1>심은렬 다이아만들기</h1>
-  <span class="who" id="who"></span>
+  <div class="brand">
+    <h1>심은렬 다이아만들기</h1>
+    <span class="mono muted" style="font-size:12px;letter-spacing:.04em" id="who"></span>
+  </div>
+  <div class="row" style="gap:10px" id="tier"></div>
 </header>
 <nav>
   <button data-tab="today" class="on">오늘</button>
@@ -115,262 +156,449 @@
 
 <script>
 // ---------------------------------------------------------------- 이미지 --
-// 챔프·아이템 이미지는 지금 붙이지 않는다. 화면 구조가 확정되기 전에 에셋을 붙이면
-// 두 번 일한다(SPEC.md "대시보드 UI"). null 을 주면 플레이스홀더가 그려진다.
-// 나중에 교체할 때는 아래 두 함수만 고치면 된다.
-//   아이콘   https://ddragon.leagueoflegends.com/cdn/<ver>/img/champion/<Champ>.png
-//   스플래시 https://ddragon.leagueoflegends.com/cdn/img/champion/splash/<Champ>_0.jpg
-const USE_CDN = false;
-let DDRAGON_VERSION = null;
-function champIcon(name){
-  if(!USE_CDN || !name || !DDRAGON_VERSION) return null;
-  return `https://ddragon.leagueoflegends.com/cdn/${DDRAGON_VERSION}/img/champion/${name}.png`;
-}
-function champSplash(name){
-  if(!USE_CDN || !name) return null;
-  return `https://ddragon.leagueoflegends.com/cdn/img/champion/splash/${name}_0.jpg`;
-}
+// Data Dragon 원본을 직접 붙인다. 버전은 /today 가 내려준다.
+//   아이콘   /cdn/<ver>/img/champion/<Champ>.png
+//   스플래시 /cdn/img/champion/splash/<Champ>_0.jpg
+const DD = "https://ddragon.leagueoflegends.com";
+let VER = null;
+const champIcon   = n => (VER && n) ? `${DD}/cdn/${VER}/img/champion/${n}.png` : null;
+const champSplash = n => n ? `${DD}/cdn/img/champion/splash/${n}_0.jpg` : null;
 
 let KO = {};
 const ko = n => KO[n] || n;
+// 라인 이름은 챔프 한글맵에 없다. 리포트/탐색 화면과 같은 표기를 쓴다.
+const ROLE_KO = {TOP:"탑", JUNGLE:"정글", MIDDLE:"미드", BOTTOM:"원딜", UTILITY:"서폿"};
+const rko = r => ROLE_KO[r] || r;
 
-// ------------------------------------------------------------------ 유틸 --
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? "").replace(/[&<>"]/g, c =>
   ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
-const num = (v, d=2) => (v===null||v===undefined) ? "—" : Number(v).toFixed(d);
-const pct = v => (v===null||v===undefined) ? "—" : (Number(v)*100).toFixed(1)+"%";
+const num = (v,d=2) => (v===null||v===undefined) ? "—" : Number(v).toFixed(d);
+const pct = (v,d=1) => (v===null||v===undefined) ? "—" : (Number(v)*100).toFixed(d)+"%";
+const signed = v => (v===null||v===undefined) ? "—"
+  : (v<0 ? "−"+Math.abs(Math.round(v)) : "+"+Math.round(v));
 
-async function get(path){
-  const r = await fetch(path);
-  if(!r.ok){
-    let d = ""; try{ d = (await r.json()).detail || ""; }catch(e){}
-    throw new Error(d || `${path} — HTTP ${r.status}`);
-  }
+async function get(p){
+  const r = await fetch(p);
+  if(!r.ok){ let d=""; try{ d=(await r.json()).detail||""; }catch(e){}
+             throw new Error(d || `${p} — HTTP ${r.status}`); }
   return r.json();
 }
-function fail(sel, e){
-  $(sel).innerHTML = `<div class="card"><p class="err">${esc(e.message)}</p></div>`;
-}
+const fail = (sel,e) => $(sel).innerHTML =
+  `<div class="card pad"><p class="err">${esc(e.message)}</p></div>`;
 
-function iconHtml(name, cls){
-  const url = champIcon(name);
-  const style = url ? ` style="background-image:url('${url}')"` : "";
-  // 36px 짜리에는 "말파이트"가 안 들어가 두 줄로 깨진다. 플레이스홀더는 앞 두 글자만.
-  const full = ko(name);
-  const label = url ? "" : esc(cls === "sm" ? full.slice(0, 2) : full);
-  return `<div class="champ-icon ${cls||""}"${style} title="${esc(full)}">${label}</div>`;
+// 이미지가 아직 없거나 CDN 이 막히면 챔프명 텍스트로 떨어진다
+function icon(name, cls){
+  const url = champIcon(name), full = esc(ko(name));
+  const short = cls && cls.includes("sm") ? full.slice(0,2) : full;
+  return url
+    ? `<img class="ico ${cls||""}" src="${url}" alt="${full}" title="${full}"
+         onerror="this.replaceWith(Object.assign(document.createElement('div'),
+                  {className:'ico ${cls||""}',textContent:'${short}',title:'${full}'}))">`
+    : `<div class="ico ${cls||""}" title="${full}">${short}</div>`;
 }
 
 // ------------------------------------------------------- 미니 마크다운 --
-// 리포트는 제목·표·굵게가 거의 전부다. 이 정도라면 외부 라이브러리를 받아올 이유가
-// 없다(로컬 도구라 오프라인에서도 떠야 한다).
+// 리포트는 제목·표·굵게가 거의 전부다. 로컬 도구라 오프라인에서도 떠야 해서
+// 외부 라이브러리를 받아오지 않는다.
 function md(src){
   const inline = t => esc(t)
-    .replace(/`([^`]+)`/g, "<code>$1</code>")
-    .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
-    .replace(/(^|\W)_([^_]+)_(?=\W|$)/g, "$1<em>$2</em>");
-  const lines = String(src).split(/\r?\n/);
-  const out = [];
-  let i = 0, para = [], list = null;
-  const flushP = () => { if(para.length){ out.push(`<p>${inline(para.join(" "))}</p>`); para = []; } };
-  const flushL = () => { if(list){ out.push(`</${list}>`); list = null; } };
-  const isRow = s => /^\s*\|.*\|\s*$/.test(s);
-  const cells = s => s.trim().replace(/^\||\|$/g, "").split("|").map(c => c.trim());
-
-  while(i < lines.length){
-    const line = lines[i];
-    if(isRow(line) && isRow(lines[i+1] || "") && /^[\s|:-]+$/.test(lines[i+1])){
-      flushP(); flushL();
-      const head = cells(line); i += 2;
-      const body = [];
-      while(i < lines.length && isRow(lines[i])){ body.push(cells(lines[i])); i++; }
-      const th = head.map(h => `<th>${inline(h)}</th>`).join("");
-      const tr = body.map(r => "<tr>" + r.map(c => `<td>${inline(c)}</td>`).join("") + "</tr>").join("");
-      out.push(`<div class="scroll"><table><thead><tr>${th}</tr></thead><tbody>${tr}</tbody></table></div>`);
-      continue;
+    .replace(/`([^`]+)`/g,"<code>$1</code>")
+    .replace(/\*\*([^*]+)\*\*/g,"<strong>$1</strong>")
+    .replace(/(^|\W)_([^_]+)_(?=\W|$)/g,"$1<em>$2</em>");
+  const L = String(src).split(/\r?\n/); const out=[]; let i=0,para=[],list=null;
+  const fp=()=>{ if(para.length){ out.push(`<p>${inline(para.join(" "))}</p>`); para=[]; } };
+  const fl=()=>{ if(list){ out.push(`</${list}>`); list=null; } };
+  const isRow=s=>/^\s*\|.*\|\s*$/.test(s);
+  const cells=s=>s.trim().replace(/^\||\|$/g,"").split("|").map(c=>c.trim());
+  while(i<L.length){
+    const line=L[i];
+    if(isRow(line)&&isRow(L[i+1]||"")&&/^[\s|:-]+$/.test(L[i+1])){
+      fp();fl(); const head=cells(line); i+=2; const body=[];
+      while(i<L.length&&isRow(L[i])){ body.push(cells(L[i])); i++; }
+      out.push(`<div class="scroll"><table><thead><tr>${
+        head.map(h=>`<th>${inline(h)}</th>`).join("")}</tr></thead><tbody>${
+        body.map(r=>"<tr>"+r.map(c=>`<td>${inline(c)}</td>`).join("")+"</tr>").join("")
+      }</tbody></table></div>`); continue;
     }
-    const h = line.match(/^(#{1,4})\s+(.*)$/);
-    if(h){ flushP(); flushL(); out.push(`<h${h[1].length}>${inline(h[2])}</h${h[1].length}>`); i++; continue; }
-    if(/^\s*---+\s*$/.test(line)){ flushP(); flushL(); out.push("<hr>"); i++; continue; }
-    const li = line.match(/^\s*([-*]|\d+\.)\s+(.*)$/);
-    if(li){
-      flushP();
-      const want = /^\d/.test(li[1]) ? "ol" : "ul";
-      if(list !== want){ flushL(); out.push(`<${want}>`); list = want; }
-      out.push(`<li>${inline(li[2])}</li>`); i++; continue;
-    }
-    if(!line.trim()){ flushP(); flushL(); i++; continue; }
-    flushL(); para.push(line.trim()); i++;
+    const h=line.match(/^(#{1,4})\s+(.*)$/);
+    if(h){ fp();fl(); out.push(`<h${h[1].length}>${inline(h[2])}</h${h[1].length}>`); i++; continue; }
+    if(/^\s*---+\s*$/.test(line)){ fp();fl(); out.push("<hr>"); i++; continue; }
+    const li=line.match(/^\s*([-*]|\d+\.)\s+(.*)$/);
+    if(li){ fp(); const w=/^\d/.test(li[1])?"ol":"ul";
+            if(list!==w){ fl(); out.push(`<${w}>`); list=w; }
+            out.push(`<li>${inline(li[2])}</li>`); i++; continue; }
+    if(!line.trim()){ fp();fl(); i++; continue; }
+    fl(); para.push(line.trim()); i++;
   }
-  flushP(); flushL();
-  return `<div class="md">${out.join("\n")}</div>`;
+  fp();fl(); return `<div class="md">${out.join("\n")}</div>`;
+}
+// 코치 메모에서 한 섹션만 꺼낸다 (**제목** 다음 문단)
+function section(memo, title){
+  const m = String(memo||"").split(/\n(?=\*\*)/)
+    .find(b => b.startsWith(`**${title}**`));
+  // "**한 줄 요약** — 본문" 형태라 제목을 떼면 앞의 대시가 남는다
+  return m ? m.replace(`**${title}**`,"").replace(/^\s*[—–-]\s*/,"").trim() : null;
 }
 
-// ------------------------------------------------------------- 오늘 화면 --
-function starsHtml(m){
-  const b = n => `<button data-match="${esc(m.match_id)}" data-score="${n}"
-    class="${m.score===n?"on":""}">${n}</button>`;
-  return `<span class="stars">${[1,2,3,4,5].map(b).join("")}</span>`;
-}
-
+// ------------------------------------------------------------- 오늘 --
 async function loadToday(){
-  let d;
-  try{ d = await get("/today"); }catch(e){ return fail("#today", e); }
-  KO = d.champ_ko || {}; DDRAGON_VERSION = d.ddragon_version;
-  $("#who").textContent = d.riot_id || "";
+  let d; try{ d = await get("/today"); }catch(e){ return fail("#today",e); }
+  KO = d.champ_ko || {}; VER = d.ddragon_version;
+  $("#who").textContent = (d.riot_id||"") + " · KR";
+  $("#tier").innerHTML = !d.tier ? "" : `
+    <span class="chip now"><span style="width:6px;height:6px;border-radius:50%;background:var(--bronze)"></span>
+      <span class="mono">${esc(d.tier)} ${esc(d.rank||"")} · ${d.lp} LP</span></span>
+    <svg width="18" height="10" viewBox="0 0 18 10" fill="none"><path d="M1 5h15m0 0-4-4m4 4-4 4"
+      stroke="#3d444e" stroke-width="1.4" stroke-linecap="round"/></svg>
+    <span class="chip goal"><svg width="11" height="11" viewBox="0 0 12 12" fill="none">
+      <path d="M6 1 11 6l-5 5L1 6z" stroke="#6fd3e8" stroke-width="1.3" stroke-linejoin="round"/></svg>
+      <span class="mono">DIAMOND</span></span>`;
+
   const p = d.phase;
+  const cards = !p ? "" : `<div class="champs">${(p.current_champs||[]).map((c,idx)=>{
+    const sp = champSplash(c);
+    return `<div class="champ-card">
+      ${sp ? `<div class="splash" style="background-image:url('${sp}')"></div>` : `<div class="splash ph"></div>`}
+      <div class="veil"></div>
+      <div class="body">${icon(c, idx===0?"cur":"")}
+        <div>
+          <div class="champ-name">${esc(ko(c))}</div>
+          <div class="mono" style="font-size:11.5px;color:var(--dim);letter-spacing:.05em;margin-top:4px">
+            ${esc(c.toUpperCase())} · 기준 챔프</div>
+          <div class="row" style="gap:6px;margin-top:9px">
+            <span class="mono pill" style="background:rgba(255,255,255,.05);color:var(--fg2)">${p.current_games} / ${p.current_target}판</span>
+            ${idx===0?'<span class="mono pill cur">지금</span>':''}
+          </div>
+        </div>
+      </div></div>`; }).join("")}</div>`;
 
-  const champCards = !p ? "" : `<div class="champs">${
-    (p.current_champs||[]).map(c => {
-      const sp = champSplash(c);
-      const bg = sp ? `<div class="splash" style="background-image:url('${sp}')"></div>`
-                    : `<div class="splash ph" data-name="${esc(c)}"></div>`;
-      return `<div class="champ-card">${bg}${iconHtml(c)}
-        <div><div class="champ-name">${esc(ko(c))}</div>
-        <div class="champ-sub">${esc(c)} · 기준 챔프</div></div></div>`;
-    }).join("")}</div>`;
-
-  const prog = !p ? "" : `
-    <div class="card">
-      <h2>지금 할 것 — ${p.current_role ? esc(p.current_role) : "전 라인 목표 달성"}</h2>
-      ${champCards}
-      <div class="bar"><i style="width:${p.target?(p.done/p.target*100):0}%"></i></div>
-      <div class="row muted">
-        <span>전체 <b class="win">${p.done}</b> / ${p.target}판</span>
-        ${p.current_role ? `<span>· 이 라인 ${p.current_games}/${p.current_target}판
-          (<b>${p.current_left}판 남음</b>)</span>` : ""}
-        <span>· 순서 ${(p.order||[]).join(" → ")}</span>
+  const hero = !p ? "" : `
+    <div style="display:flex;flex-direction:column;gap:14px">
+      <div class="spread">
+        <div class="row" style="gap:12px;align-items:baseline">
+          <span class="eyebrow">지금 할 것</span>
+          <span style="font-size:20px;font-weight:700;letter-spacing:-.015em">
+            ${p.current_role ? esc(rko(p.current_role)) : "전 라인 목표 달성"}
+            ${p.current_role ? `<span class="faint" style="font-weight:400"> · </span>
+              <span class="mono" style="font-size:17px;color:var(--dia-t)">${p.current_left}판</span>
+              <span style="font-size:15px;color:var(--fg2);font-weight:400"> 남았습니다</span>` : ""}</span>
+        </div>
+        <div class="mono muted" style="font-size:12px">탐색 순서 &nbsp;${
+          (p.order||[]).map(r => r===p.current_role
+            ? `<span style="color:var(--fg)">${esc(rko(r))}</span>` : esc(rko(r))).join(" → ")}</div>
       </div>
-      ${p.complete ? "" : `<p class="muted" style="margin:10px 0 0">
-        75판을 채우기 전에는 라인을 결정하지 않습니다.</p>`}
+      ${cards}
+      <div class="row" style="gap:16px;margin-top:2px;flex-wrap:nowrap">
+        <div class="bar"><div class="ghost"></div>
+          <i style="width:${p.target?Math.max(p.done/p.target*100,p.done?1.5:0):0}%"></i></div>
+        <div class="mono muted" style="font-size:12px;white-space:nowrap">탐색
+          <span style="color:var(--fg);font-size:14px;font-weight:600">${p.done}</span> / ${p.target}판</div>
+      </div>
+      ${p.complete?"":`<div class="muted" style="font-size:12.5px">75판을 채우기 전에는 라인을 결정하지 않습니다.</div>`}
     </div>`;
 
-  const task = `<div class="card"><h2>이번 주 과제</h2>
-    <div class="task">${esc(d.weekly_task)}</div>
-    ${d.memo_headline ? `<p class="muted" style="margin-bottom:0">${md(d.memo_headline)}</p>` : ""}
-    </div>`;
+  const detail = section(d.memo_detail, "이번 주 과제");
+  const task = `<div class="card" style="overflow:hidden">
+      <div class="row" style="gap:10px;padding:15px 24px 0">
+        <span class="tick"></span><span class="eyebrow">이번 주 과제</span>
+        <span class="mono faint" style="margin-left:auto;font-size:11px">한 번에 하나만 고칩니다</span>
+      </div>
+      <div style="padding:12px 24px 22px">
+        <div style="font-size:19px;font-weight:600;line-height:1.55;letter-spacing:-.01em">
+          ${esc(d.weekly_task)}</div>
+        ${detail ? `<div style="margin-top:10px;font-size:13.5px;color:var(--fg2);line-height:1.8">
+          ${md(detail).replace(/^<div class="md">|<\/div>$/g,"")}</div>` : ""}
+      </div></div>`;
 
-  const unrated = d.unrated?.length
-    ? `<p class="muted">평점을 안 남긴 탐색 경기 <b class="win">${d.unrated.length}판</b>이 있습니다.</p>`
-    : `<p class="muted">평점을 안 남긴 탐색 경기는 없습니다.</p>`;
-
-  const rows = (d.recent||[]).map(m => `
-    <tr>
-      <td class="muted">${esc(m.when)}</td>
-      <td class="row" style="gap:8px">${iconHtml(m.champion,"sm")}<span>${esc(m.champion_ko)}</span></td>
-      <td>${esc(m.role)}</td>
-      <td class="${m.win?"win":"lose"}">${m.win?"승":"패"}</td>
-      <td class="num">${esc(m.kda)}</td>
-      <td>${starsHtml(m)}</td>
-      <td class="muted">${esc(m.memo||"")}</td>
+  const rows = (d.recent||[]).map(m=>`
+    <tr${m.score?' style="background:linear-gradient(90deg,rgba(111,211,232,.05),rgba(111,211,232,0) 60%)"':''}>
+      <td class="mono muted" style="font-size:12px;white-space:nowrap">${esc(m.when)}</td>
+      <td><div class="row" style="gap:10px;flex-wrap:nowrap">${icon(m.champion,"sm dim")}
+        <span>${esc(m.champion_ko)}</span></div></td>
+      <td class="mono muted" style="font-size:11.5px">${esc(m.role)}</td>
+      <td style="font-size:12.5px;font-weight:600;color:${m.win?'var(--win)':'var(--lose)'}">${m.win?"승":"패"}</td>
+      <td class="mono num" style="font-size:12.5px;color:var(--fg2)">${esc(m.kda)}</td>
+      <td><div class="stars">${[1,2,3,4,5].map(n=>
+        `<button data-match="${esc(m.match_id)}" data-score="${n}" class="${m.score===n?"on":""}">${n}</button>`
+      ).join("")}</div></td>
+      <td class="muted" style="font-size:12px">${esc(m.memo||"")}</td>
     </tr>`).join("");
 
-  $("#today").innerHTML = prog + task + `
-    <div class="card"><h2>최근 경기 — 30초 루틴</h2>
-      ${unrated}
-      <div class="row" style="margin:10px 0">
-        <input type="text" id="rateMemo" placeholder="메모 (선택) — 점수를 누르면 같이 저장됩니다">
+  $("#today").innerHTML = hero + task + `
+    <div class="card pad">
+      <div class="row" style="margin-bottom:14px">
+        <span class="eyebrow">최근 경기</span>
+        <span style="font-size:12.5px;color:var(--dim)">판 끝나고 재미 점수 하나 —
+          <span style="color:var(--fg2)">30초면 끝납니다</span></span>
+        <span class="mono faint" style="margin-left:auto;font-size:11px">평점 미기록 ${(d.unrated||[]).length}판</span>
       </div>
+      <div class="row" style="margin-bottom:12px">
+        <input type="text" id="rateMemo" placeholder="메모 (선택) — 점수를 누르면 같이 저장됩니다"></div>
       <div class="scroll"><table>
         <thead><tr><th>시각</th><th>챔프</th><th>라인</th><th>결과</th>
-        <th class="num">K/D/A</th><th>재미</th><th>메모</th></tr></thead>
+          <th class="num">K / D / A</th><th style="text-align:right">재미</th><th>메모</th></tr></thead>
         <tbody>${rows || `<tr><td colspan="7" class="muted">경기가 없습니다.</td></tr>`}</tbody>
       </table></div>
     </div>`;
 
-  $("#today").querySelectorAll(".stars button").forEach(b => {
+  $("#today").querySelectorAll(".stars button").forEach(b=>{
     b.onclick = () => sendRate(b.dataset.match, Number(b.dataset.score));
   });
 }
 
 async function sendRate(match_id, score){
-  const memo = ($("#rateMemo")?.value || "").trim() || null;
+  const memo = ($("#rateMemo")?.value||"").trim() || null;
   try{
-    const r = await fetch("/rate", {
-      method:"POST", headers:{"Content-Type":"application/json"},
-      body: JSON.stringify({score, memo, match_id}),
-    });
+    const r = await fetch("/rate",{method:"POST",headers:{"Content-Type":"application/json"},
+                                  body:JSON.stringify({score,memo,match_id})});
     if(!r.ok) throw new Error((await r.json()).detail || `HTTP ${r.status}`);
-    if($("#rateMemo")) $("#rateMemo").value = "";
     await loadToday();
-    await loadExplore();   // 재미 점수는 적합도에 30% 들어간다 — 탐색 화면도 갱신
+    if(loaded.explore) await loadExplore();   // 재미 점수는 적합도에 30% 들어간다
   }catch(e){ alert("기록 실패: " + e.message); }
 }
 
-// ------------------------------------------------------------- 탐색 화면 --
+// ------------------------------------------------------------- 탐색 --
 async function loadExplore(){
-  let d;
-  try{ d = await get("/explore"); }catch(e){ return fail("#explore", e); }
+  let d; try{ d = await get("/explore"); }catch(e){ return fail("#explore",e); }
   KO = d.champ_ko || KO;
+  const cols = "40px 206px 132px 1fr 76px 68px 68px 92px";
+  const head = `<div style="display:grid;grid-template-columns:${cols};align-items:center;
+      padding:0 20px 9px;font-size:10.5px;color:var(--dim2);letter-spacing:.1em">
+      <div>순서</div><div>라인</div><div>기준 챔프</div><div>진행</div>
+      <div class="num">승률</div><div class="num">재미</div><div class="num">지표</div>
+      <div class="num">적합도</div></div>`;
 
-  const rows = d.reports.map(r => `
-    <tr>
-      <td class="row" style="gap:8px">
-        ${(r.champs||[]).map(c => iconHtml(c,"sm")).join("")}
-        <span><b>${esc(r.role)}</b> ${r.is_current?'<span class="pill now">지금</span>':""}</span>
-      </td>
-      <td class="num">${r.games}/${r.target}</td>
-      <td class="num">${r.violations||0}</td>
-      <td class="num">${r.order_violations||0}</td>
-      <td class="num">${pct(r.winrate)}</td>
-      <td class="num">${num(r.fun_avg,1)}</td>
-      <td class="num">${num(r.metric_score,2)}</td>
-      <td class="num"><b>${num(r.fit,2)}</b></td>
-      <td class="muted">${(r.champs||[]).map(c=>esc(ko(c))).join(", ")}</td>
-    </tr>`).join("");
+  const rows = d.reports.map((r,i)=>{
+    const on = r.is_current;
+    return `<div style="display:grid;grid-template-columns:${cols};align-items:center;
+        padding:17px 20px;border-radius:13px;position:relative;
+        ${on ? `background:linear-gradient(90deg,rgba(111,211,232,.09),rgba(111,211,232,.02) 55%,rgba(111,211,232,0));
+                border:1px solid rgba(111,211,232,.30)`
+             : `background:var(--panel);border:1px solid var(--line2)`}">
+      ${on?`<div style="position:absolute;left:0;top:14px;bottom:14px;width:3px;
+             border-radius:0 3px 3px 0;background:var(--dia)"></div>`:""}
+      <div class="mono" style="font-size:14px;font-weight:${on?600:400};
+           color:${on?"var(--dia-t)":"var(--dim2)"}">${i+1}</div>
+      <div class="row" style="gap:9px;align-items:baseline;flex-wrap:nowrap">
+        <span style="font-size:16.5px;font-weight:${on?700:600};color:${on?"var(--fg)":"var(--fg2)"}">${esc(rko(r.role))}</span>
+        <span class="mono" style="font-size:10.5px;color:var(--dim2);letter-spacing:.08em">${esc(r.role)}</span>
+        ${on?'<span class="mono pill cur">지금</span>':''}
+        ${r.role==="JUNGLE"?'<span class="pill" style="background:rgba(255,255,255,.045);color:var(--dim)">마지막</span>':''}
+      </div>
+      <div class="row" style="gap:7px;flex-wrap:nowrap">${
+        (r.champs||[]).map(c=>icon(c, on?"md":"md dim")).join("")}</div>
+      <div class="row" style="gap:13px;padding-right:26px;flex-wrap:nowrap">
+        <div class="bar thin"><i style="width:${r.target?Math.min(r.games/r.target*100,100):0}%"></i></div>
+        <span class="mono" style="font-size:12.5px;white-space:nowrap;
+              color:${on?"var(--fg2)":"var(--dim)"}">${r.games} / ${r.target}</span></div>
+      <div class="mono num" style="font-size:13px;color:${r.winrate==null?"var(--faint)":"var(--fg2)"}">${pct(r.winrate)}</div>
+      <div class="mono num" style="font-size:13px;color:${r.fun_avg==null?"var(--faint)":"var(--fg2)"}">${num(r.fun_avg,1)}</div>
+      <div class="mono num" style="font-size:13px;color:${r.metric_score==null?"var(--faint)":"var(--fg2)"}">${num(r.metric_score,2)}</div>
+      <div class="mono num" style="font-size:13px;font-weight:600;
+           color:${r.fit==null?"var(--faint)":"var(--dia-t)"}">${num(r.fit,2)}</div>
+    </div>`;}).join("");
+
+  const viol = d.reports.reduce((s,r)=>s+(r.violations||0),0);
+  const ord  = d.reports.reduce((s,r)=>s+(r.order_violations||0),0);
 
   $("#explore").innerHTML = `
-    <div class="card">
-      <h2>탐색 단계 '${esc(d.phase_name)}' · 시작 ${esc(d.start_date)}</h2>
-      <div class="bar"><i style="width:${d.target?(d.done/d.target*100):0}%"></i></div>
-      <p class="muted">진행 <b class="win">${d.done}</b>/${d.target}판 ·
-        순서 ${(d.order||[]).join(" → ")}
-        ${d.current_role?` · 지금 <b>${esc(d.current_role)}</b> (${d.current_left}판 남음)`:""}</p>
-      <div class="scroll"><table>
-        <thead><tr><th>라인</th><th class="num">진행</th><th class="num">챔프위반</th>
-        <th class="num">순서위반</th><th class="num">승률</th><th class="num">재미</th>
-        <th class="num">지표</th><th class="num">적합도</th><th>기준 챔프</th></tr></thead>
-        <tbody>${rows}</tbody>
-      </table></div>
-      <p class="muted" style="margin-bottom:0">적합도 = 지표 70% + 재미 30%.
-        축은 브론즈 벤치=0, 골드 벤치=1.
-        ${d.complete?"":"75판을 채우기 전에는 라인을 결정하지 않습니다."}</p>
+    <div class="spread" style="align-items:flex-end">
+      <div style="max-width:660px">
+        <div style="font-size:23px;font-weight:700;letter-spacing:-.02em;line-height:1.4">
+          5개 라인을 <span class="mono" style="font-size:21px;color:var(--dia-t)">15판</span>씩 돌려보고
+          <span style="color:var(--dia-t)">데이터로</span> 고릅니다</div>
+        <div class="muted" style="font-size:13.5px;margin-top:9px;line-height:1.7">
+          익숙한 라인을 마지막에 두는 건 익숙한 데로 도망가지 않기 위해서입니다.</div>
+      </div>
+      <div class="row" style="gap:26px;align-items:flex-end">
+        <div style="text-align:right">
+          <div style="font-size:11px;color:var(--dim);letter-spacing:.14em;margin-bottom:4px">전체 진행</div>
+          <div><span class="mono" style="font-size:38px;font-weight:600;letter-spacing:-.02em">${d.done}</span>
+               <span class="mono" style="font-size:17px;color:var(--dim2)"> / ${d.target}판</span></div></div>
+        <div style="width:1px;height:44px;background:var(--line)"></div>
+        <div style="text-align:right">
+          <div style="font-size:11px;color:var(--dim);letter-spacing:.14em;margin-bottom:4px">위반</div>
+          <div class="row" style="gap:10px;justify-content:flex-end">
+            <span class="mono" style="font-size:22px;color:${viol?"var(--lose)":"var(--win)"}">${viol}</span>
+            <span class="faint" style="font-size:11.5px">챔프</span>
+            <span class="mono" style="font-size:22px;color:${ord?"var(--lose)":"var(--win)"}">${ord}</span>
+            <span class="faint" style="font-size:11.5px">순서</span></div></div>
+      </div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:9px">${head}${rows}</div>
+    <div style="display:flex;gap:16px;flex-wrap:wrap">
+      <div class="card pad" style="flex-grow:1;min-width:400px">
+        <div class="eyebrow" style="margin-bottom:13px">적합도 계산</div>
+        <div class="row" style="gap:11px;margin-bottom:14px">
+          <span class="mono" style="font-size:13px;color:var(--fg2);padding:5px 11px;border-radius:7px;
+                background:var(--panel2);border:1px solid var(--line)">지표 70%</span>
+          <span class="faint">+</span>
+          <span class="mono" style="font-size:13px;color:var(--fg2);padding:5px 11px;border-radius:7px;
+                background:var(--panel2);border:1px solid var(--line)">재미 30%</span></div>
+        <div class="muted" style="font-size:12.5px;line-height:1.75">
+          승률이 아니라 절대 지표(CS · 데스 시점 · 시야 · 골드차)를 벤치와 비교합니다.
+          단위가 다른 값을 더할 수 있게 <span style="color:var(--fg2)">브론즈 벤치 = 0, 골드 벤치 = 1</span>
+          축 위로 옮깁니다.</div>
+        <div class="row" style="gap:0;margin-top:15px;flex-wrap:nowrap">
+          <span class="mono" style="font-size:10.5px;color:var(--bronze-t);letter-spacing:.08em">BRONZE 0</span>
+          <div style="flex-grow:1;height:4px;margin:0 12px;border-radius:999px;
+               background:linear-gradient(90deg,var(--bronze),#8a8f6a,var(--dia))"></div>
+          <span class="mono" style="font-size:10.5px;color:var(--dia-t);letter-spacing:.08em">GOLD 1</span></div>
+      </div>
+      ${d.complete?"":`<div style="width:392px;border-radius:13px;border:1px solid rgba(200,138,74,.22);
+        background:rgba(200,138,74,.045);padding:19px 22px">
+        <div class="row" style="gap:9px;margin-bottom:12px;flex-wrap:nowrap">
+          <svg width="15" height="15" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6.6"
+            stroke="#c88a4a" stroke-width="1.3"/><path d="M8 4.6v4M8 11.1v.4" stroke="#c88a4a"
+            stroke-width="1.5" stroke-linecap="round"/></svg>
+          <span style="font-size:12.5px;font-weight:600;color:var(--bronze-t)">아직 판단하지 않습니다</span></div>
+        <div style="font-size:12.5px;color:#9a8a76;line-height:1.75">
+          75판을 채우기 전에는 어떤 라인도 추천하지 않습니다.
+          15판 미만 표본으로는 승률이 크게 흔들려 결론을 낼 수 없습니다.</div>
+        <div style="margin-top:15px;padding-top:14px;border-top:1px solid rgba(200,138,74,.16)">
+          <span class="mono" style="font-size:26px;font-weight:600;color:var(--bronze-t)">${d.target-d.done}</span>
+          <span style="font-size:12.5px;color:#9a8a76"> 판 남았습니다</span></div>
+      </div>`}
     </div>`;
 }
 
-// ------------------------------------------------------------- 진단 화면 --
+// ------------------------------------------------------------- 진단 --
 async function loadReport(){
-  try{
-    const d = await get("/report");
-    $("#report").innerHTML = `<div class="card">${md(d.markdown)}</div>`;
-  }catch(e){ fail("#report", e); }
+  let d; try{ d = await get("/report"); }catch(e){ return fail("#report",e); }
+  const s = d.summary;
+  const stats = !s ? "" : `<div class="stats">
+    <div class="stat"><div class="k">총 판수</div>
+      <div><span class="mono v">${s.games}</span></div>
+      <div class="s">리메이크 제외</div></div>
+    <div class="stat"><div class="k">승률</div>
+      <div class="mono v" style="color:${s.winrate>=0.5?"var(--win)":"var(--lose-t)"}">${pct(s.winrate)}</div>
+      <div class="mono s">${s.wins}승 ${s.losses}패</div></div>
+    <div class="stat"><div class="k">KDA</div>
+      <div class="mono v">${num(s.kda)}</div>
+      <div class="mono s">${num(s.k,1)} / ${num(s.d,1)} / ${num(s.a,1)}</div></div>
+    <div class="stat"><div class="k">분당 CS</div>
+      <div class="mono v">${num(s.cs_per_min)}</div>
+      <div class="s">시야점수/분 ${num(s.vision_per_min)}</div></div>
+    <div class="stat"><div class="k">벤치마크</div>
+      <div class="mono v">${s.bench_total}</div>
+      <div class="mono s">${Object.entries(s.bench_by_tier).map(([t,n])=>t[0]+" "+n).join(" · ")}</div></div>
+  </div>`;
+
+  const gaps = !(d.gaps||[]).length ? "" : `<div class="card pad" style="padding:22px 24px">
+    <div class="row" style="gap:12px;margin-bottom:20px;align-items:baseline">
+      <span class="eyebrow">확실히 밀리는 것</span>
+      <span class="muted" style="font-size:12.5px">벤치와 격차가 있는 것만 봅니다</span></div>
+    <div style="display:flex;flex-direction:column;gap:20px">${d.gaps.map((g,i)=>{
+      const f = v => g.pct ? pct(v) : num(v,g.digits);
+      const max = Math.max(g.mine,g.bench)||1;
+      const worse = g.pct ? g.mine < g.bench : (g.label.includes("데스") ? g.mine > g.bench : g.mine < g.bench);
+      const delta = g.pct ? ((g.mine-g.bench)*100).toFixed(1)+"%p"
+                          : (g.mine-g.bench>=0?"+":"−")+Math.abs(g.mine-g.bench).toFixed(2);
+      return `${i?'<div style="height:1px;background:#1a1e24"></div>':''}
+      <div class="gap">
+        <div><div style="font-size:14px;font-weight:600">${esc(g.label)}</div>
+          <div class="muted" style="font-size:11.5px;margin-top:3px">${esc(g.sub)}</div></div>
+        <div style="display:flex;flex-direction:column;gap:7px">
+          <div class="row" style="gap:11px;flex-wrap:nowrap">
+            <span class="mono muted" style="font-size:10.5px;width:52px">나</span>
+            <div class="gbar"><i style="width:${g.mine/max*100}%;background:var(--lose)"></i></div>
+            <span class="mono" style="font-size:12.5px;color:var(--lose-t);width:58px;text-align:right">${f(g.mine)}</span></div>
+          <div class="row" style="gap:11px;flex-wrap:nowrap">
+            <span class="mono muted" style="font-size:10.5px;width:52px">${esc(g.bench_tier)}</span>
+            <div class="gbar"><i style="width:${g.bench/max*100}%;background:${
+              g.bench_tier==="BRONZE"?"var(--bronze);opacity:.5":"var(--dia);opacity:.55"}"></i></div>
+            <span class="mono" style="font-size:12.5px;color:${
+              g.bench_tier==="BRONZE"?"var(--bronze-t)":"var(--dia-t)"};width:58px;text-align:right">${f(g.bench)}</span></div>
+        </div>
+        <div style="text-align:right">
+          <div class="mono" style="font-size:21px;font-weight:600;color:${worse?"var(--lose)":"var(--win)"}">${delta}</div>
+          <div class="faint" style="font-size:10.5px;margin-top:3px">${esc(g.note)}</div></div>
+      </div>`;}).join("")}</div></div>`;
+
+  const lanes = !(d.lanes||[]).length ? "" : `<div class="card" style="overflow:hidden">
+    <div class="row" style="gap:12px;padding:20px 24px 14px;align-items:baseline">
+      <span class="eyebrow">라인별</span>
+      <span class="muted" style="font-size:12.5px">15판 미만은 판단 근거로 쓰지 않습니다</span></div>
+    <div class="scroll" style="padding:0 24px 8px"><table>
+      <thead><tr><th>라인</th><th class="num">판수</th><th class="num">승률</th>
+        <th class="num">판당 데스</th><th class="num">15분 골드차</th></tr></thead>
+      <tbody>${d.lanes.map(l=>`<tr>
+        <td><span style="font-weight:600">${esc(l.role_ko)}</span>
+          ${l.low_sample?' <span class="pill warn">표본 부족</span>':''}</td>
+        <td class="mono num" style="color:${l.low_sample?"var(--dim)":"var(--fg)"}">${l.games}</td>
+        <td class="mono num" style="color:${l.low_sample?"var(--dim)":(l.winrate>=0.5?"var(--win)":"var(--lose-t)")}">${pct(l.winrate)}</td>
+        <td class="mono num" style="color:${l.low_sample?"var(--dim)":"var(--fg)"}">${num(l.deaths)}</td>
+        <td class="mono num" style="color:${l.gold15_diff==null?"var(--dim2)":(l.gold15_diff<0?"var(--lose)":"var(--win)")}">${signed(l.gold15_diff)}</td>
+      </tr>`).join("")}</tbody></table></div></div>`;
+
+  $("#report").innerHTML = stats + gaps + lanes +
+    `<div class="card pad"><details><summary style="cursor:pointer;color:var(--dim);font-size:12.5px;
+       padding:2px 0">리포트 전문 보기</summary>${md(d.markdown)}</details></div>`;
 }
 
-// ------------------------------------------------------------- 코치 화면 --
+// ------------------------------------------------------------- 코치 --
 async function loadCoach(){
-  try{
-    const d = await get("/coach");
-    $("#coach").innerHTML = `
-      <div class="card">
-        <h2>코치 메모</h2>
-        <p class="muted">${esc(d.report_date)} · ${esc(d.model)} ·
-          입력 ${d.input_tokens} / 출력 ${d.output_tokens} 토큰</p>
-        <div class="task" style="margin-bottom:14px">이번 주 과제 — ${esc(d.weekly_task)}</div>
-        ${md(d.memo)}
-      </div>`;
-  }catch(e){ fail("#coach", e); }
+  let d; try{ d = await get("/coach"); }catch(e){ return fail("#coach",e); }
+  const memo = d.memo || "";
+  const head = section(memo,"한 줄 요약");
+  const cost = (d.input_tokens*5 + d.output_tokens*25)/1e6;
+  const body = memo.split(/\n(?=\*\*)/).filter(b=>!b.startsWith("**한 줄 요약**")).join("\n");
+
+  $("#coach").innerHTML = `
+    <div style="display:flex;gap:26px;flex-wrap:wrap;align-items:flex-start">
+      <div style="flex-grow:1;min-width:520px;max-width:800px;display:flex;flex-direction:column;gap:20px">
+        ${head?`<div>
+          <div class="eyebrow" style="margin-bottom:12px">한 줄 요약</div>
+          <div style="font-size:22px;font-weight:600;line-height:1.62;letter-spacing:-.015em">
+            ${md(head).replace(/^<div class="md"><p>|<\/p>\n?<\/div>$/g,"")}</div></div>`:""}
+        <div style="height:1px;background:#1a1e24"></div>
+        <div class="task">
+          <div class="row" style="gap:10px;margin-bottom:12px">
+            <span class="tick"></span>
+            <span class="eyebrow" style="color:var(--dia-t)">이번 주 과제</span>
+            <span class="mono" style="margin-left:auto;font-size:10.5px;color:#5a7f8a">사용자가 정한 과제</span></div>
+          <div style="font-size:16px;font-weight:600;line-height:1.7">${esc(d.weekly_task)}</div></div>
+        ${md(body)}
+      </div>
+      <div style="width:326px;display:flex;flex-direction:column;gap:14px">
+        <div class="card pad">
+          <div class="eyebrow" style="margin-bottom:15px">이 메모가 지킨 것</div>
+          ${[["분량", `${memo.length} / 900자`, memo.length<=900],
+             ["이번 주 과제", (memo.match(/\*\*이번 주 과제\*\*/g)||[]).length+"개",
+              (memo.match(/\*\*이번 주 과제\*\*/g)||[]).length===1],
+             ["라인 판단", memo.includes("유보")?"유보":"확인 필요", memo.includes("유보")],
+             ["추정 표기", memo.includes("추정")?"있음":"없음", memo.includes("추정")]
+            ].map(([k,v,ok])=>`
+            <div class="row" style="gap:11px;margin-bottom:11px;flex-wrap:nowrap">
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none">${ok
+                ? '<path d="M3.4 8.4 6.4 11.4l6.2-6.8" stroke="#5fd08a" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>'
+                : '<path d="M4.5 4.5l7 7M11.5 4.5l-7 7" stroke="#f0736a" stroke-width="1.6" stroke-linecap="round"/>'}</svg>
+              <span style="font-size:12.5px;color:var(--fg2);flex-grow:1">${k}</span>
+              <span class="mono" style="font-size:12px;color:${ok?"#7ddba4":"var(--lose-t)"}">${v}</span></div>`).join("")}
+        </div>
+        <div class="card pad">
+          <div class="eyebrow" style="margin-bottom:13px">1회 비용</div>
+          <div><span class="mono" style="font-size:29px;font-weight:600">$${cost.toFixed(2)}</span>
+            <span class="faint" style="font-size:11.5px"> / 회</span></div>
+          <div class="mono muted" style="font-size:11px;line-height:1.9;margin-top:11px">
+            입력 ${d.input_tokens.toLocaleString()} × $5/1M<br>
+            출력 ${d.output_tokens.toLocaleString()} × $25/1M</div>
+          <div class="mono faint" style="font-size:10.5px;margin-top:10px">${esc(d.report_date)} · ${esc(d.model)}</div>
+        </div>
+      </div>
+    </div>`;
 }
 
 // -------------------------------------------------------------------- 탭 --
 const LOADERS = {today:loadToday, explore:loadExplore, report:loadReport, coach:loadCoach};
 const loaded = {};
 function show(tab){
-  document.querySelectorAll("nav button").forEach(b => b.classList.toggle("on", b.dataset.tab===tab));
-  document.querySelectorAll("main section").forEach(s => s.classList.toggle("on", s.id===tab));
-  if(!loaded[tab]){ loaded[tab] = true; LOADERS[tab](); }
+  document.querySelectorAll("nav button").forEach(b=>b.classList.toggle("on", b.dataset.tab===tab));
+  document.querySelectorAll("main section").forEach(s=>s.classList.toggle("on", s.id===tab));
+  if(!loaded[tab]){ loaded[tab]=true; LOADERS[tab](); }
 }
-document.querySelectorAll("nav button").forEach(b => b.onclick = () => show(b.dataset.tab));
+document.querySelectorAll("nav button").forEach(b=> b.onclick=()=>show(b.dataset.tab));
 show("today");
 </script>
 </body>

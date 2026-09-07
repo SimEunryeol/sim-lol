@@ -112,6 +112,7 @@ def today():
 
         return _clean({
             "riot_id": f"{me['game_name']}#{me['tag_line']}",
+            "tier": me["tier"], "rank": me["rank"], "lp": me["lp"],
             "phase": {
                 "name": summary["phase_name"] if summary else None,
                 "done": summary["done"] if summary else 0,
@@ -126,6 +127,8 @@ def today():
             } if summary else None,
             "weekly_task": coach.WEEKLY_TASK,
             "memo_headline": (memo["memo"].strip().splitlines()[0] if memo else None),
+            # 화면이 '이번 주 과제' 절만 떼어 쓴다 (목표 수치가 거기 들어 있다)
+            "memo_detail": (memo["memo"] if memo else None),
             "recent": recent,
             "unrated": unrated,
             "champ_ko": _ko_map(static),
@@ -144,10 +147,83 @@ def explore_status():
         return _clean(summary)
 
 
+def _diagnosis(conn) -> dict:
+    """진단 화면이 그리는 값. 리포트 마크다운을 파싱하지 않고 같은 소스에서 다시 센다.
+
+    마크다운을 파싱하면 문구가 바뀔 때마다 화면이 조용히 깨진다.
+    """
+    metrics, deaths = report.load(conn)
+    metrics = metrics[metrics["duration_s"].fillna(0) >= config.REMAKE_MAX_S]
+    me = metrics[metrics["p_is_me"] == 1]
+    if me.empty:
+        return {}
+    tiers = report.sort_tiers(
+        metrics[metrics["p_is_bench"] == 1]["p_tier"].dropna().unique())
+
+    wins = int(me["win"].sum())
+    summary = {
+        "games": int(len(me)), "wins": wins, "losses": int(len(me)) - wins,
+        "winrate": me["win"].mean(),
+        "kda": ((me["kills"] + me["assists"]) / me["deaths"].clip(lower=1)).mean(),
+        "k": me["kills"].mean(), "d": me["deaths"].mean(), "a": me["assists"].mean(),
+        "cs_per_min": me["cs_per_min"].mean(),
+        "vision_per_min": me["vision_per_min"].mean(),
+        "bench_total": int((metrics["p_is_bench"] == 1).sum()),
+        "bench_by_tier": {t: int(len(report.bench_slice(metrics, t))) for t in tiers},
+    }
+
+    def gap(label, sub, col, position, bench_tier, digits, as_pct, note):
+        mine_df = me[me["team_position"] == position] if position else me
+        bench_df = report.bench_slice(metrics, bench_tier, position)
+        a_ = report.agg(mine_df).get(col)
+        b_ = report.agg(bench_df).get(col)
+        if a_ is None or b_ is None:
+            return None
+        return {"label": label, "sub": sub, "mine": float(a_), "bench": float(b_),
+                "bench_tier": bench_tier, "pct": as_pct, "digits": digits, "note": note}
+
+    gaps = [g for g in (
+        gap("제어 와드 산 판 비율", "정글 259판", "control_ward_rate", "JUNGLE",
+            "GOLD", 1, True, "이번 주 과제"),
+        gap("적정글 체류", "분 / 판", "enemy_jungle_minutes", "JUNGLE",
+            "BRONZE", 2, False, "브론즈 벤치 대비"),
+    ) if g]
+
+    # 25분 이후 데스는 판당으로만 비교할 수 있다 (표본 크기가 달라 절대수는 무의미)
+    def late(mask_players, n_games):
+        d = deaths[mask_players & (deaths["minute"] >= 25)]
+        return len(d) / max(1, n_games)
+    my_late = late(deaths["p_is_me"] == 1, len(me))
+    for t in ("GOLD", "SILVER", "BRONZE"):
+        n = int(((metrics["p_is_bench"] == 1) & (metrics["p_tier"] == t)).sum())
+        if n:
+            gaps.append({"label": "25분 이후 데스", "sub": "판당 · 유일하게 벤치를 넘음",
+                         "mine": my_late,
+                         "bench": late((deaths["p_is_bench"] == 1) & (deaths["p_tier"] == t), n),
+                         "bench_tier": t, "pct": False, "digits": 2,
+                         "note": "후반 판단 문제"})
+            break
+
+    lanes = []
+    for pos in report.POSITION_ORDER:
+        d = me[me["team_position"] == pos]
+        if not len(d):
+            continue
+        a_ = report.agg(d)
+        lanes.append({
+            "role": pos, "role_ko": report.POSITION_KO.get(pos, pos),
+            "games": int(len(d)), "winrate": a_.get("winrate"),
+            "deaths": a_.get("deaths"), "gold15_diff": a_.get("gold15_diff"),
+            "low_sample": len(d) < report.MIN_POSITION_GAMES,
+        })
+    return {"summary": summary, "gaps": gaps, "lanes": lanes, "tiers": list(tiers)}
+
+
 @app.get("/report")
 def report_markdown():
     with session(_db()) as conn:
-        return {"markdown": report.build(conn), "generated_at": now_iso()}
+        return _clean({"markdown": report.build(conn), "generated_at": now_iso(),
+                       **_diagnosis(conn)})
 
 
 @app.get("/coach")
