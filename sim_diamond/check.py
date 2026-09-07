@@ -13,7 +13,7 @@ import sqlite3
 import sys
 from datetime import datetime
 
-from . import config, geo
+from . import config, geo, metrics
 from .db import counts, session
 from .ddragon import Static
 
@@ -84,9 +84,17 @@ def overview(conn: sqlite3.Connection) -> list[sqlite3.Row]:
     print(f"    큐     : {queues}" + ("  ← 420(솔랭) 외가 섞였습니다" if queues != [420] else ""))
     print(f"    패치   : {', '.join(patches)}")
     if durs:
-        print(f"    게임시간: {durs[0] // 60}분 ~ {durs[-1] // 60}분 (중앙 {durs[len(durs) // 2] // 60}분)")
-        if durs[-1] > 7200 or durs[0] < 240:
-            warn(f"게임시간이 비정상입니다 (min={durs[0]}s, max={durs[-1]}s) — 초/밀리초 단위 오류 의심")
+        med = durs[len(durs) // 2]
+        print(f"    게임시간: {durs[0] // 60}분 ~ {durs[-1] // 60}분 (중앙 {med // 60}분)")
+        remakes = [r for r in rows if (r["duration_s"] or 0) < config.REMAKE_MAX_S]
+        if remakes:
+            print(f"    리메이크: {len(remakes)}판 (5분 미만) — 집계에서 제외됩니다: "
+                  + ", ".join(f"{r['match_id']}({r['duration_s']}s)" for r in remakes[:3]))
+        # 단위 오류라면 중앙값까지 이상해진다. 짧은 판 한둘은 리메이크지 버그가 아니다.
+        if med > 7200 or med < 600:
+            warn(f"게임시간 중앙값이 {med}s 입니다 — 초/밀리초 단위 오류 의심")
+        if durs[-1] > 7200:
+            warn(f"게임시간 최대값이 {durs[-1]}s({durs[-1] // 60}분) 입니다 — 확인 필요")
     if queues != [420] and queues:
         warn(f"솔랭(420) 외의 큐가 섞여 있습니다: {queues}")
     bad = [r["match_id"] for r in rows if r["n_part"] != 10]
@@ -176,8 +184,36 @@ def death_check(conn: sqlite3.Connection, me_rows: list) -> None:
             warn("와드 있던 데스가 0건입니다 — 와드 위치 근사가 동작하지 않을 수 있습니다")
 
 
+def jungle_calibration(conn: sqlite3.Connection) -> None:
+    """정글 CS 곡선을 실제로 보여준다. '첫 풀캠프' 임계값이 맞는지 눈으로 확인하려는 것."""
+    me = conn.execute("SELECT puuid FROM players WHERE is_me = 1").fetchone()
+    if not me:
+        return
+    rows = conn.execute("""
+        SELECT f.minute, f.jungle_cs FROM frames f
+        JOIN participant_metrics pm ON pm.match_id = f.match_id AND pm.puuid = f.puuid
+        WHERE f.puuid = ? AND pm.is_jungle = 1 AND f.minute BETWEEN 1 AND 6
+    """, (me["puuid"],)).fetchall()
+    if not rows:
+        return
+    by_min: dict[int, list[int]] = {}
+    for r in rows:
+        by_min.setdefault(r["minute"], []).append(r["jungle_cs"] or 0)
+    print(f"\n[6] 정글 CS 곡선 (정글 판 실측, '첫 풀캠프' 임계값 {metrics.FULL_CLEAR_JUNGLE_CS} 검증용)")
+    print("    분    " + "  ".join(f"{m:>4}" for m in sorted(by_min)))
+    print("    중앙  " + "  ".join(
+        f"{sorted(v)[len(v) // 2]:>4}" for _, v in sorted(by_min.items())))
+    hit = next((m for m in sorted(by_min)
+                if sorted(by_min[m])[len(by_min[m]) // 2] >= metrics.FULL_CLEAR_JUNGLE_CS), None)
+    print(f"    → 중앙값이 {metrics.FULL_CLEAR_JUNGLE_CS} 를 넘는 시점: {hit}분")
+    if hit is not None and hit <= 2:
+        warn(f"정글 CS 가 {hit}분에 벌써 임계값 {metrics.FULL_CLEAR_JUNGLE_CS} 를 넘습니다 — "
+             f"첫 풀캠프(6캠프)는 보통 3분 15초쯤이므로 임계값이 너무 낮습니다. "
+             f"metrics.FULL_CLEAR_JUNGLE_CS 를 올려야 합니다.")
+
+
 def event_types(conn: sqlite3.Connection) -> None:
-    print("\n[5] 이벤트 종류 (지표가 의존하는 것들)")
+    print("\n[7] 이벤트 종류 (지표가 의존하는 것들)")
     rows = conn.execute(
         "SELECT type, COUNT(*) n FROM events GROUP BY type ORDER BY n DESC"
     ).fetchall()
@@ -236,6 +272,7 @@ def main(argv: list[str] | None = None) -> int:
         rows = overview(conn)
         me_rows = my_metrics(conn)
         death_check(conn, me_rows)
+        jungle_calibration(conn)
         event_types(conn)
 
         target = args.match

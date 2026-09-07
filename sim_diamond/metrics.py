@@ -25,7 +25,8 @@ FULL_CLEAR_JUNGLE_CS = 12      # 첫 풀캠프 완료 근사 기준
 FIRST_GANK_AFTER_MS = 180_000
 LANE_ZONES = {"TOP", "MID", "BOT"}   # 첫 갱으로 인정하는 구역
 BACK_CLUSTER_GAP_MS = 20_000   # 이 간격보다 벌어지면 다른 상점 방문으로 본다
-DEATH_BACK_WINDOW_MS = 75_000  # 데스 후 이 시간 안의 상점 방문은 부활 귀환으로 본다
+# 상점 방문 직전(= 지난 방문 이후)에 죽은 적이 있으면 그 방문은 부활 귀환으로 본다.
+# 부활 시간은 레벨·게임시간에 따라 10~50초로 크게 변해서 고정 시간창은 오분류가 많다.
 DEATH_BUCKETS = ((0, 5), (5, 10), (10, 15), (15, 20), (20, 25), (25, 10**6))
 DEATH_BUCKET_LABELS = ["0-5", "5-10", "10-15", "15-20", "20-25", "25+"]
 FAKE_WARDS = {"UNDEFINED", "TEEMO_MUSHROOM"}
@@ -343,13 +344,15 @@ def _items_and_backs(ctx: MatchContext, puuid: str, static: Static, death_ts: li
             clusters.append(ts)
         last = ts
     visits = [ts for ts in clusters if ts > 30_000]  # 시작 아이템 구매 제외
-    voluntary = [
-        ts for ts in visits
-        if not any(0 <= ts - d <= DEATH_BACK_WINDOW_MS for d in death_ts)
-    ]
+    voluntary, prev = [], 0
+    for ts in visits:
+        died_since = any(prev < d <= ts for d in death_ts)
+        if not died_since:
+            voluntary.append(ts)
+        prev = ts
     out["back_count"] = len(visits)
     out["voluntary_back_count"] = len(voluntary)
-    out["back_times_json"] = json.dumps([round(ts / 60_000, 2) for ts in visits])
+    out["back_times_json"] = json.dumps([round(ts / 60_000, 2) for ts in voluntary])
     return out
 
 

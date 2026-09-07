@@ -154,7 +154,11 @@ def main() -> int:
         check("코어템 = 월식(6692) 11.0분", m["first_core_item_id"] == 6692 and abs(m["first_core_item_min"] - 11.0) < 0.01,
               f"{m['first_core_item_id']} @ {m['first_core_item_min']}")
         check("첫 제어와드 5.6분", abs(m["first_control_ward_min"] - 5.6) < 0.01, str(m["first_control_ward_min"]))
-        check("귀환(상점방문) 3회", m["back_count"] == 3, m["back_times_json"])
+        # 상점 방문 4회 중 3회는 데스 직후(부활), 20.5분 1회만 자발적 귀환
+        check("상점 방문 4회", m["back_count"] == 4, str(m["back_count"]))
+        check("자발적 귀환 1회 @20.5분",
+              m["voluntary_back_count"] == 1 and json.loads(m["back_times_json"]) == [20.5],
+              f"{m['voluntary_back_count']} {m['back_times_json']}")
         objd = json.loads(m["obj_detail_json"])
         check("아군 오브젝트만 집계(4개)", m["obj_team_total"] == 4, json.dumps(objd, ensure_ascii=False))
         check("드래곤 처치자=나 → 참여", objd.get("DRAGON", [0, 0])[1] == 1, json.dumps(objd, ensure_ascii=False))

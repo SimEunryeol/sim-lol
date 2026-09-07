@@ -181,6 +181,8 @@ def make_match(
     add(17.0, {"type": "ITEM_PURCHASED", "participantId": hero_pid, "itemId": 3153})
     add(17.05, {"type": "ITEM_UNDO", "participantId": hero_pid, "beforeId": 3153, "afterId": 0})
     add(17.2, {"type": "ITEM_PURCHASED", "participantId": hero_pid, "itemId": 3153})
+    # 20.5분 방문은 직전 방문(17.2) 이후 죽은 적이 없다 → 자발적 귀환
+    add(20.5, {"type": "ITEM_PURCHASED", "participantId": hero_pid, "itemId": 2055})
 
     # 아군 와드: 8.5분 미드 근처(8.9분 데스와 가까움), 14분 봇(멀리)
     add(8.5, {"type": "WARD_PLACED", "creatorId": ally_ids[2], "wardType": "CONTROL_WARD"})

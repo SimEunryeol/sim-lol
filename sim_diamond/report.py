@@ -107,7 +107,8 @@ def cmp_rows(me: dict, silver: dict, gold: dict, spec: list[tuple[str, str, call
 
 
 # ---------------------------------------------------------------- 섹션들 --
-def s_summary(me: pd.DataFrame, conn: sqlite3.Connection, bench_tiers: list[str]) -> str:
+def s_summary(me: pd.DataFrame, conn: sqlite3.Connection, bench_tiers: list[str],
+              n_remakes: int = 0) -> str:
     player = conn.execute("SELECT * FROM players WHERE is_me = 1").fetchone()
     tier = f"{player['tier']} {player['rank']} {player['lp']}LP" if player and player["tier"] else "미상"
     name = f"{player['game_name']}#{player['tag_line']}" if player else "?"
@@ -121,8 +122,11 @@ def s_summary(me: pd.DataFrame, conn: sqlite3.Connection, bench_tiers: list[str]
         f"- 평균 KDA **{fmt(((me['kills'] + me['assists']) / me['deaths'].clip(lower=1)).mean())}** "
         f"(K {fmt(me['kills'].mean(), 1)} / D {fmt(me['deaths'].mean(), 1)} / A {fmt(me['assists'].mean(), 1)})",
         f"- 평균 분당 CS **{fmt(me['cs_per_min'].mean())}** · 평균 시야점수/분 **{fmt(me['vision_per_min'].mean())}**",
-        f"- 벤치마크: " + ", ".join(bench_tiers) if bench_tiers else "- 벤치마크: _수집 안 됨_",
+        ("- 벤치마크: " + ", ".join(bench_tiers)) if bench_tiers else "- 벤치마크: _수집 안 됨_",
     ]
+    if n_remakes:
+        lines.append(f"- 리메이크/조기종료 **{n_remakes}판**은 모든 집계에서 제외했다 "
+                     f"({config.REMAKE_MAX_S // 60}분 미만)")
     return "\n".join(lines) + "\n"
 
 
@@ -295,8 +299,9 @@ def s_notes(static: Static) -> str:
         "(분 단위 프레임 + 킬 이벤트 좌표를 선형보간)로 **근사**한 값이다.\n"
         "- 오브젝트 참여: 본인 좌표도 같은 방식의 근사값이며, 킬러 본인·어시스트 기록자는 무조건 참여로 본다.\n"
         "- 첫 풀캠프: 정글 CS 가 12에 도달한 시각을 프레임 사이 선형보간으로 추정한다.\n"
-        "- 귀환: 타임라인에 귀환 이벤트가 없어 상점 구매 묶음(간격 20초 초과 시 분리)으로 추정하고, "
-        "데스 후 75초 안의 구매는 부활 귀환으로 분류한다.\n"
+        "- 귀환: 타임라인에 귀환 이벤트가 없어 상점 구매 묶음(간격 20초 초과 시 분리)을 기지 방문으로 본다. "
+        "직전 방문 이후 죽은 적이 있으면 부활로 돌아온 것이므로 자발적 귀환에서 뺀다.\n"
+        f"- 리메이크/조기종료({config.REMAKE_MAX_S // 60}분 미만)는 모든 집계에서 제외한다.\n"
         + ("- 코어템 판정: Data Dragon 캐시가 없어 이번 리포트에서는 비어 있다.\n" if not static.available else
            f"- 코어템 판정: Data Dragon {static.version} 기준 총 골드 2900 이상 아이템의 첫 구매.\n")
     )
@@ -306,6 +311,11 @@ def s_notes(static: Static) -> str:
 def build(conn: sqlite3.Connection) -> str:
     metrics, deaths = load(conn)
     static = Static(conn)
+    # 리메이크/조기종료는 모든 집계에서 뺀다(승률·판당 데스를 왜곡한다).
+    n_all = len(metrics)
+    remakes = metrics[metrics["duration_s"].fillna(0) < config.REMAKE_MAX_S]
+    n_my_remakes = int((remakes["p_is_me"] == 1).sum())
+    metrics = metrics[metrics["duration_s"].fillna(0) >= config.REMAKE_MAX_S]
     me = metrics[metrics["p_is_me"] == 1].copy()
     bench_tiers = sorted(
         t for t in metrics[metrics["p_is_bench"] == 1]["p_tier"].dropna().unique()
@@ -317,7 +327,7 @@ def build(conn: sqlite3.Connection) -> str:
         "# 심은렬 다이아만들기 — 첫 진단 리포트",
         f"\n_생성일: {today}_\n",
         "\n## 1. 요약\n",
-        s_summary(me, conn, bench_desc),
+        s_summary(me, conn, bench_desc, n_my_remakes),
         "\n## 2. 라인별 지표 (벤치마크 비교)\n",
         s_positions(me, metrics),
         f"\n## 3. 챔피언별 ({MIN_CHAMP_GAMES}판 이상)\n",
