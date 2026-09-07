@@ -1,0 +1,25 @@
+{
+  "artboards": [
+    { "file": "Main.dc.html",    "x": 0,    "y": 0,    "w": 1280, "h": 980,  "title": "오늘" },
+    { "file": "Explore.dc.html", "x": 1400, "y": 0,    "w": 1280, "h": 900,  "title": "탐색" },
+    { "file": "Report.dc.html",  "x": 0,    "y": 1140, "w": 1280, "h": 1180, "title": "진단" },
+    { "file": "Coach.dc.html",   "x": 1400, "y": 1140, "w": 1280, "h": 980,  "title": "코치" }
+  ],
+  "annotations": [
+    {
+      "id": "brief",
+      "x": 2760,
+      "y": 0,
+      "w": 300,
+      "text": "sim-diamond 대시보드\n\n숫자는 전부 실제 데이터입니다 (솔랭 348판, 벤치 439판, 탐색 0/75판).\n\n챔프 이미지는 Data Dragon 16.17.1 원본입니다."
+    },
+    {
+      "id": "why-bronze-diamond",
+      "x": 2760,
+      "y": 260,
+      "w": 300,
+      "text": "색 두 개가 서사입니다.\n\n브론즈(구리) = 지금\n다이아(청록) = 목표\n\n진행 막대와 적합도 축이 둘 사이를 잇습니다."
+    }
+  ],
+  "launch": { "view": "canvas" }
+}

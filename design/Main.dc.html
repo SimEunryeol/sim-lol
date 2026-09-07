@@ -1,0 +1,245 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+  <style>
+    body{margin:0;background:#0a0c0f;
+         font-family:"IBM Plex Sans KR","Malgun Gothic",system-ui,sans-serif;
+         -webkit-font-smoothing:antialiased}
+    a{color:#7fd8ec} a:hover{color:#a8e6f4}
+    .mono{font-family:"IBM Plex Mono","Consolas",monospace;font-variant-numeric:tabular-nums}
+  </style>
+</helmet>
+
+<div style="width:1280px;min-height:980px;background:
+    radial-gradient(900px 420px at 12% -8%, #16232b 0%, rgba(10,12,15,0) 62%),
+    radial-gradient(700px 380px at 96% 4%, #1b1726 0%, rgba(10,12,15,0) 58%),
+    #0a0c0f;color:#e9ecef;display:flex;flex-direction:column">
+
+  <!-- 상단 바 : 현재 티어에서 목표까지가 이 도구의 서사다 -->
+  <div style="display:flex;align-items:center;justify-content:space-between;
+       padding:22px 40px 18px;border-bottom:1px solid #1c2027">
+    <div style="display:flex;align-items:baseline;gap:14px">
+      <div style="font-size:17px;font-weight:700;letter-spacing:-.01em">심은렬 다이아만들기</div>
+      <div class="mono" style="font-size:12px;color:#6f7783;letter-spacing:.04em">F360#KR1 · KR</div>
+    </div>
+    <div style="display:flex;align-items:center;gap:10px">
+      <div style="display:flex;align-items:center;gap:7px;padding:5px 12px;border-radius:999px;
+           background:rgba(200,138,74,.10);border:1px solid rgba(200,138,74,.30)">
+        <span style="width:6px;height:6px;border-radius:50%;background:#c88a4a"></span>
+        <span class="mono" style="font-size:11.5px;color:#d9a877;letter-spacing:.06em">BRONZE III · 16 LP</span>
+      </div>
+      <svg width="18" height="10" viewBox="0 0 18 10" fill="none"><path d="M1 5h15m0 0-4-4m4 4-4 4" stroke="#3d444e" stroke-width="1.4" stroke-linecap="round"/></svg>
+      <div style="display:flex;align-items:center;gap:7px;padding:5px 12px;border-radius:999px;
+           background:rgba(111,211,232,.08);border:1px solid rgba(111,211,232,.26)">
+        <svg width="11" height="11" viewBox="0 0 12 12" fill="none"><path d="M6 1 11 6l-5 5L1 6z" stroke="#6fd3e8" stroke-width="1.3" stroke-linejoin="round"/></svg>
+        <span class="mono" style="font-size:11.5px;color:#8fdff0;letter-spacing:.06em">DIAMOND</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- 탭 -->
+  <div style="display:flex;gap:2px;padding:0 40px;border-bottom:1px solid #1c2027">
+    <div style="padding:13px 4px;margin-right:26px;font-size:13.5px;font-weight:600;color:#e9ecef;
+         box-shadow:inset 0 -2px 0 #6fd3e8">오늘</div>
+    <div style="padding:13px 4px;margin-right:26px;font-size:13.5px;color:#6f7783">탐색</div>
+    <div style="padding:13px 4px;margin-right:26px;font-size:13.5px;color:#6f7783">진단</div>
+    <div style="padding:13px 4px;font-size:13.5px;color:#6f7783">코치</div>
+  </div>
+
+  <div style="display:flex;flex-direction:column;gap:22px;padding:26px 40px 34px">
+
+    <!-- 지금 할 것 -->
+    <div style="display:flex;flex-direction:column;gap:14px">
+      <div style="display:flex;align-items:baseline;justify-content:space-between">
+        <div style="display:flex;align-items:baseline;gap:12px">
+          <div style="font-size:11px;font-weight:600;color:#6f7783;letter-spacing:.16em">지금 할 것</div>
+          <div style="font-size:20px;font-weight:700;letter-spacing:-.015em">탑 <span style="color:#4a515c;font-weight:400">·</span> <span class="mono" style="font-size:17px;color:#8fdff0">15판</span> <span style="font-size:15px;color:#8a919c;font-weight:400">남았습니다</span></div>
+        </div>
+        <div class="mono" style="font-size:12px;color:#6f7783">탐색 순서 &nbsp;<span style="color:#e9ecef">탑</span> → 미드 → 원딜 → 서폿 → 정글</div>
+      </div>
+
+      <!-- 기준 챔프 2개 : 스플래시를 배경으로 깔고 어둡게 처리 -->
+      <div style="display:grid;grid-template-columns:repeat(2, minmax(0, 1fr));gap:16px">
+
+        <div style="position:relative;overflow:hidden;border-radius:14px;border:1px solid #232a33;height:172px">
+          <div style="position:absolute;inset:0;background-image:url('Garen.jpg');background-size:cover;background-position:center 30%;transform:scale(1.06);filter:blur(1px)"></div>
+          <div style="position:absolute;inset:0;background:
+               linear-gradient(90deg, rgba(10,12,15,.97) 0%, rgba(10,12,15,.88) 42%, rgba(10,12,15,.42) 100%)"></div>
+          <div style="position:relative;height:100%;display:flex;align-items:center;gap:20px;padding:0 24px">
+            <img src="Garen.jpg" alt="가렌" style="width:64px;height:64px;border-radius:50%;
+                 object-fit:cover;border:2px solid rgba(111,211,232,.45);flex:0 0 64px;
+                 box-shadow:0 0 0 4px rgba(111,211,232,.08)">
+            <div style="display:flex;flex-direction:column;gap:5px">
+              <div style="font-size:22px;font-weight:700;letter-spacing:-.02em">가렌</div>
+              <div class="mono" style="font-size:11.5px;color:#7c8490;letter-spacing:.05em">GAREN · 기준 챔프</div>
+              <div style="display:flex;gap:6px;margin-top:5px">
+                <span class="mono" style="font-size:11px;color:#8a919c;padding:3px 9px;border-radius:6px;background:rgba(255,255,255,.05)">0 / 15판</span>
+                <span class="mono" style="font-size:11px;color:#8fdff0;padding:3px 9px;border-radius:6px;background:rgba(111,211,232,.10)">지금</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div style="position:relative;overflow:hidden;border-radius:14px;border:1px solid #232a33;height:172px">
+          <div style="position:absolute;inset:0;background-image:url('Malphite.jpg');background-size:cover;background-position:center 30%;transform:scale(1.06);filter:blur(1px)"></div>
+          <div style="position:absolute;inset:0;background:
+               linear-gradient(90deg, rgba(10,12,15,.97) 0%, rgba(10,12,15,.88) 42%, rgba(10,12,15,.42) 100%)"></div>
+          <div style="position:relative;height:100%;display:flex;align-items:center;gap:20px;padding:0 24px">
+            <img src="Malphite.jpg" alt="말파이트" style="width:64px;height:64px;border-radius:50%;
+                 object-fit:cover;border:2px solid rgba(255,255,255,.14);flex:0 0 64px">
+            <div style="display:flex;flex-direction:column;gap:5px">
+              <div style="font-size:22px;font-weight:700;letter-spacing:-.02em">말파이트</div>
+              <div class="mono" style="font-size:11.5px;color:#7c8490;letter-spacing:.05em">MALPHITE · 기준 챔프</div>
+              <div style="display:flex;gap:6px;margin-top:5px">
+                <span class="mono" style="font-size:11px;color:#8a919c;padding:3px 9px;border-radius:6px;background:rgba(255,255,255,.05)">0 / 15판</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 브론즈에서 다이아까지, 75판 중 어디까지 왔나 -->
+      <div style="display:flex;align-items:center;gap:16px;margin-top:2px">
+        <div style="flex-grow:1;height:6px;border-radius:999px;background:#171b21;overflow:hidden;position:relative">
+          <div style="position:absolute;inset:0;background:linear-gradient(90deg,#c88a4a,#6fd3e8);opacity:.14"></div>
+          <div style="position:relative;height:100%;width:1.5%;background:linear-gradient(90deg,#c88a4a,#e0a86a);border-radius:999px"></div>
+        </div>
+        <div class="mono" style="font-size:12px;color:#8a919c;white-space:nowrap">
+          탐색 <span style="color:#e9ecef;font-size:14px;font-weight:600">0</span> / 75판</div>
+      </div>
+    </div>
+
+    <!-- 이번 주 과제 : 한 번에 딱 하나 -->
+    <div style="border-radius:14px;border:1px solid #232a33;background:#0f1216;overflow:hidden">
+      <div style="display:flex;align-items:center;gap:10px;padding:15px 24px 0">
+        <span style="width:3px;height:13px;border-radius:2px;background:#6fd3e8"></span>
+        <div style="font-size:11px;font-weight:600;color:#6f7783;letter-spacing:.16em">이번 주 과제</div>
+        <div class="mono" style="margin-left:auto;font-size:11px;color:#4a515c">한 번에 하나만 고칩니다</div>
+      </div>
+      <div style="display:flex;gap:32px;padding:12px 24px 22px;align-items:flex-end">
+        <div style="flex-grow:1">
+          <div style="font-size:19px;font-weight:600;line-height:1.55;letter-spacing:-.01em;text-wrap:pretty">
+            매 귀환마다 제어 와드를 <span style="color:#8fdff0">1개씩</span> 사서,
+            판당 <span style="color:#8fdff0">2개 이상</span> 유지하세요.</div>
+          <div style="font-size:13px;color:#7c8490;margin-top:9px">다음 리포트에서 아래 두 숫자로 확인합니다.</div>
+        </div>
+        <div style="display:flex;gap:12px">
+          <div style="min-width:158px;padding:13px 16px;border-radius:11px;background:#12161b;border:1px solid #232a33">
+            <div style="font-size:11px;color:#6f7783;margin-bottom:7px">제어 와드 구매 <span style="color:#4a515c">(탑)</span></div>
+            <div style="display:flex;align-items:baseline;gap:8px">
+              <span class="mono" style="font-size:19px;color:#5a626d">0.2</span>
+              <svg width="14" height="8" viewBox="0 0 14 8" fill="none"><path d="M0 4h11m0 0-3-3m3 3-3 3" stroke="#4a515c" stroke-width="1.3" stroke-linecap="round"/></svg>
+              <span class="mono" style="font-size:25px;font-weight:600;color:#8fdff0">2.0</span>
+            </div>
+          </div>
+          <div style="min-width:178px;padding:13px 16px;border-radius:11px;background:#12161b;border:1px solid #232a33">
+            <div style="font-size:11px;color:#6f7783;margin-bottom:7px">산 판 비율 <span style="color:#4a515c">(GOLD 70.6%)</span></div>
+            <div style="display:flex;align-items:baseline;gap:8px">
+              <span class="mono" style="font-size:19px;color:#5a626d">20.0%</span>
+              <svg width="14" height="8" viewBox="0 0 14 8" fill="none"><path d="M0 4h11m0 0-3-3m3 3-3 3" stroke="#4a515c" stroke-width="1.3" stroke-linecap="round"/></svg>
+              <span class="mono" style="font-size:25px;font-weight:600;color:#8fdff0">70%</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 30초 루틴 : 판 끝나면 점수 하나 -->
+    <div style="border-radius:14px;border:1px solid #232a33;background:#0f1216;padding:18px 24px 8px">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">
+        <div style="font-size:11px;font-weight:600;color:#6f7783;letter-spacing:.16em">최근 경기</div>
+        <div style="font-size:12.5px;color:#7c8490">판 끝나고 재미 점수 하나 — <span style="color:#a8b0bb">30초면 끝납니다</span></div>
+        <div class="mono" style="margin-left:auto;font-size:11px;color:#4a515c">평점 미기록 0판</div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:92px 1fr 92px 54px 108px 210px;gap:0;
+           font-size:11px;color:#5a626d;padding:0 4px 8px;border-bottom:1px solid #1c2027">
+        <div>시각</div><div>챔프</div><div>라인</div><div>결과</div><div style="text-align:right">K / D / A</div><div style="text-align:right">재미</div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:92px 1fr 92px 54px 108px 210px;gap:0;
+           align-items:center;padding:11px 4px;border-bottom:1px solid #15191e">
+        <div class="mono" style="font-size:12px;color:#6f7783">09-05 02:23</div>
+        <div style="display:flex;align-items:center;gap:10px">
+          <img src="Pyke.jpg" alt="파이크" style="width:30px;height:30px;border-radius:50%;object-fit:cover;opacity:.9">
+          <span style="font-size:13.5px">파이크</span></div>
+        <div class="mono" style="font-size:11.5px;color:#7c8490">UTILITY</div>
+        <div style="font-size:12.5px;color:#f0736a;font-weight:600">패</div>
+        <div class="mono" style="font-size:12.5px;color:#a8b0bb;text-align:right">1 / 17 / 15</div>
+        <div style="display:flex;gap:5px;justify-content:flex-end">
+          <span class="mono" style="width:29px;height:29px;border-radius:8px;background:#12161b;border:1px solid #232a33;color:#6f7783;font-size:12px;display:flex;align-items:center;justify-content:center">1</span>
+          <span class="mono" style="width:29px;height:29px;border-radius:8px;background:#12161b;border:1px solid #232a33;color:#6f7783;font-size:12px;display:flex;align-items:center;justify-content:center">2</span>
+          <span class="mono" style="width:29px;height:29px;border-radius:8px;background:#12161b;border:1px solid #232a33;color:#6f7783;font-size:12px;display:flex;align-items:center;justify-content:center">3</span>
+          <span class="mono" style="width:29px;height:29px;border-radius:8px;background:#12161b;border:1px solid #232a33;color:#6f7783;font-size:12px;display:flex;align-items:center;justify-content:center">4</span>
+          <span class="mono" style="width:29px;height:29px;border-radius:8px;background:#12161b;border:1px solid #232a33;color:#6f7783;font-size:12px;display:flex;align-items:center;justify-content:center">5</span>
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:92px 1fr 92px 54px 108px 210px;gap:0;
+           align-items:center;padding:11px 4px;border-bottom:1px solid #15191e;
+           background:linear-gradient(90deg, rgba(111,211,232,.05), rgba(111,211,232,0) 60%)">
+        <div class="mono" style="font-size:12px;color:#6f7783">09-05 01:53</div>
+        <div style="display:flex;align-items:center;gap:10px">
+          <img src="Shaco.jpg" alt="샤코" style="width:30px;height:30px;border-radius:50%;object-fit:cover;opacity:.9">
+          <span style="font-size:13.5px">샤코</span></div>
+        <div class="mono" style="font-size:11.5px;color:#7c8490">JUNGLE</div>
+        <div style="font-size:12.5px;color:#f0736a;font-weight:600">패</div>
+        <div class="mono" style="font-size:12.5px;color:#a8b0bb;text-align:right">2 / 15 / 6</div>
+        <div style="display:flex;gap:5px;justify-content:flex-end">
+          <span class="mono" style="width:29px;height:29px;border-radius:8px;background:#12161b;border:1px solid #232a33;color:#6f7783;font-size:12px;display:flex;align-items:center;justify-content:center">1</span>
+          <span class="mono" style="width:29px;height:29px;border-radius:8px;background:#6fd3e8;border:1px solid #6fd3e8;color:#07222a;font-size:12px;font-weight:600;display:flex;align-items:center;justify-content:center">2</span>
+          <span class="mono" style="width:29px;height:29px;border-radius:8px;background:#12161b;border:1px solid #232a33;color:#6f7783;font-size:12px;display:flex;align-items:center;justify-content:center">3</span>
+          <span class="mono" style="width:29px;height:29px;border-radius:8px;background:#12161b;border:1px solid #232a33;color:#6f7783;font-size:12px;display:flex;align-items:center;justify-content:center">4</span>
+          <span class="mono" style="width:29px;height:29px;border-radius:8px;background:#12161b;border:1px solid #232a33;color:#6f7783;font-size:12px;display:flex;align-items:center;justify-content:center">5</span>
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:92px 1fr 92px 54px 108px 210px;gap:0;
+           align-items:center;padding:11px 4px;border-bottom:1px solid #15191e">
+        <div class="mono" style="font-size:12px;color:#6f7783">09-05 01:32</div>
+        <div style="display:flex;align-items:center;gap:10px">
+          <img src="Nocturne.jpg" alt="녹턴" style="width:30px;height:30px;border-radius:50%;object-fit:cover;opacity:.9">
+          <span style="font-size:13.5px">녹턴</span></div>
+        <div class="mono" style="font-size:11.5px;color:#7c8490">JUNGLE</div>
+        <div style="font-size:12.5px;color:#f0736a;font-weight:600">패</div>
+        <div class="mono" style="font-size:12.5px;color:#a8b0bb;text-align:right">3 / 6 / 1</div>
+        <div style="display:flex;gap:5px;justify-content:flex-end">
+          <span class="mono" style="width:29px;height:29px;border-radius:8px;background:#12161b;border:1px solid #232a33;color:#6f7783;font-size:12px;display:flex;align-items:center;justify-content:center">1</span>
+          <span class="mono" style="width:29px;height:29px;border-radius:8px;background:#12161b;border:1px solid #232a33;color:#6f7783;font-size:12px;display:flex;align-items:center;justify-content:center">2</span>
+          <span class="mono" style="width:29px;height:29px;border-radius:8px;background:#12161b;border:1px solid #232a33;color:#6f7783;font-size:12px;display:flex;align-items:center;justify-content:center">3</span>
+          <span class="mono" style="width:29px;height:29px;border-radius:8px;background:#12161b;border:1px solid #232a33;color:#6f7783;font-size:12px;display:flex;align-items:center;justify-content:center">4</span>
+          <span class="mono" style="width:29px;height:29px;border-radius:8px;background:#12161b;border:1px solid #232a33;color:#6f7783;font-size:12px;display:flex;align-items:center;justify-content:center">5</span>
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:92px 1fr 92px 54px 108px 210px;gap:0;
+           align-items:center;padding:11px 4px">
+        <div class="mono" style="font-size:12px;color:#6f7783">09-05 01:11</div>
+        <div style="display:flex;align-items:center;gap:10px">
+          <img src="Nocturne.jpg" alt="녹턴" style="width:30px;height:30px;border-radius:50%;object-fit:cover;opacity:.9">
+          <span style="font-size:13.5px">녹턴</span></div>
+        <div class="mono" style="font-size:11.5px;color:#7c8490">JUNGLE</div>
+        <div style="font-size:12.5px;color:#5fd08a;font-weight:600">승</div>
+        <div class="mono" style="font-size:12.5px;color:#a8b0bb;text-align:right">5 / 0 / 3</div>
+        <div style="display:flex;gap:5px;justify-content:flex-end">
+          <span class="mono" style="width:29px;height:29px;border-radius:8px;background:#12161b;border:1px solid #232a33;color:#6f7783;font-size:12px;display:flex;align-items:center;justify-content:center">1</span>
+          <span class="mono" style="width:29px;height:29px;border-radius:8px;background:#12161b;border:1px solid #232a33;color:#6f7783;font-size:12px;display:flex;align-items:center;justify-content:center">2</span>
+          <span class="mono" style="width:29px;height:29px;border-radius:8px;background:#12161b;border:1px solid #232a33;color:#6f7783;font-size:12px;display:flex;align-items:center;justify-content:center">3</span>
+          <span class="mono" style="width:29px;height:29px;border-radius:8px;background:#12161b;border:1px solid #232a33;color:#6f7783;font-size:12px;display:flex;align-items:center;justify-content:center">4</span>
+          <span class="mono" style="width:29px;height:29px;border-radius:8px;background:#12161b;border:1px solid #232a33;color:#6f7783;font-size:12px;display:flex;align-items:center;justify-content:center">5</span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

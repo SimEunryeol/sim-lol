@@ -1,0 +1,177 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+  <style>
+    body{margin:0;background:#0a0c0f;
+         font-family:"IBM Plex Sans KR","Malgun Gothic",system-ui,sans-serif;
+         -webkit-font-smoothing:antialiased}
+    a{color:#7fd8ec} a:hover{color:#a8e6f4}
+    .mono{font-family:"IBM Plex Mono","Consolas",monospace;font-variant-numeric:tabular-nums}
+  </style>
+</helmet>
+
+<div style="width:1280px;min-height:980px;background:
+    radial-gradient(760px 380px at 6% -6%, #1b1726 0%, rgba(10,12,15,0) 60%), #0a0c0f;
+    color:#e9ecef;display:flex;flex-direction:column">
+
+  <div style="display:flex;align-items:center;justify-content:space-between;
+       padding:22px 40px 18px;border-bottom:1px solid #1c2027">
+    <div style="display:flex;align-items:baseline;gap:14px">
+      <div style="font-size:17px;font-weight:700;letter-spacing:-.01em">심은렬 다이아만들기</div>
+      <div class="mono" style="font-size:12px;color:#6f7783;letter-spacing:.04em">F360#KR1 · KR</div>
+    </div>
+    <div class="mono" style="font-size:11.5px;color:#6f7783">2026-09-07 · claude-opus-5 · 입력 12,459 / 출력 1,148 토큰</div>
+  </div>
+
+  <div style="display:flex;gap:2px;padding:0 40px;border-bottom:1px solid #1c2027">
+    <div style="padding:13px 4px;margin-right:26px;font-size:13.5px;color:#6f7783">오늘</div>
+    <div style="padding:13px 4px;margin-right:26px;font-size:13.5px;color:#6f7783">탐색</div>
+    <div style="padding:13px 4px;margin-right:26px;font-size:13.5px;color:#6f7783">진단</div>
+    <div style="padding:13px 4px;font-size:13.5px;font-weight:600;color:#e9ecef;
+         box-shadow:inset 0 -2px 0 #6fd3e8">코치</div>
+  </div>
+
+  <div style="display:flex;gap:26px;padding:30px 40px 40px">
+
+    <!-- 메모 본문 -->
+    <div style="flex-grow:1;display:flex;flex-direction:column;gap:20px;max-width:800px">
+
+      <div>
+        <div style="font-size:11px;font-weight:600;color:#6f7783;letter-spacing:.16em;margin-bottom:12px">한 줄 요약</div>
+        <div style="font-size:22px;font-weight:600;line-height:1.62;letter-spacing:-.015em;text-wrap:pretty">
+          탐색 첫 라인인 탑 15판을 <span style="color:#8fdff0">Garen · Malphite</span> 로만 채우면서,
+          <span style="color:#8fdff0">제어 와드 구매</span>만 숫자로 바꿔 놓으세요.</div>
+      </div>
+
+      <div style="height:1px;background:#1a1e24"></div>
+
+      <div>
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+          <div style="font-size:11px;font-weight:600;color:#6f7783;letter-spacing:.16em">탐색 단계 진행 현황</div>
+          <span class="mono" style="font-size:10px;color:#d9a877;padding:2px 8px;border-radius:5px;
+                background:rgba(200,138,74,.12)">라인 판단 유보</span>
+        </div>
+        <div style="font-size:14px;color:#b7bec7;line-height:1.85;text-wrap:pretty">
+          전체 <span class="mono" style="color:#e9ecef">0/75판</span>, 남은 판수 75판입니다.
+          지금 탐색 중인 라인은 <strong style="color:#e9ecef">탑(0/15, 15판 남음)</strong>, 기준 챔프는
+          Garen · Malphite 입니다. 순서 위반 0판으로 깨끗합니다. 다만 재미 점수가 전 라인 미기록
+          (재미 중립 0.5 처리)이니 매 판 끝나고 1~5점을 남겨 주세요.
+          <strong style="color:#e9ecef">탐색이 끝나지 않았으므로 라인 판단은 유보합니다.</strong></div>
+      </div>
+
+      <div style="border-radius:14px;border:1px solid rgba(111,211,232,.26);
+           background:linear-gradient(180deg, rgba(111,211,232,.055), rgba(111,211,232,.015));
+           padding:20px 24px">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+          <span style="width:3px;height:13px;border-radius:2px;background:#6fd3e8"></span>
+          <div style="font-size:11px;font-weight:600;color:#8fdff0;letter-spacing:.16em">이번 주 과제</div>
+          <div class="mono" style="margin-left:auto;font-size:10.5px;color:#5a7f8a">사용자가 정한 과제</div>
+        </div>
+        <div style="font-size:16px;font-weight:600;line-height:1.7;text-wrap:pretty">
+          매 귀환마다 제어 와드를 1개씩 사서 판당 2개 이상 유지하세요.</div>
+        <div style="font-size:13.5px;color:#9fb6bd;line-height:1.85;margin-top:10px;text-wrap:pretty">
+          탑 기준 제어 와드 구매를 <span class="mono">0.2</span> → <strong class="mono" style="color:#8fdff0">2.0 이상</strong>,
+          제어 와드 산 판 비율을 <span class="mono">20.0%</span> → <strong class="mono" style="color:#8fdff0">70% 이상</strong>
+          <span style="color:#6f8f99">(GOLD 벤치 70.6%)</span> 으로 올리는 것이 목표입니다.
+          다음 리포트에서 이 두 숫자로 확인하겠습니다.</div>
+      </div>
+
+      <div>
+        <div style="font-size:11px;font-weight:600;color:#6f7783;letter-spacing:.16em;margin-bottom:14px">우선순위 (진단)</div>
+        <div style="display:flex;flex-direction:column;gap:12px">
+
+          <div style="display:flex;gap:15px;padding:15px 18px;border-radius:11px;background:#0f1216;border:1px solid #232a33">
+            <span class="mono" style="font-size:13px;color:#8fdff0;flex:0 0 auto;font-weight:600">1</span>
+            <div style="font-size:13.5px;color:#b7bec7;line-height:1.8;text-wrap:pretty">
+              <strong style="color:#e9ecef">제어 와드</strong> — 탑 구매 <span class="mono">0.2</span> /
+              산 판 비율 <span class="mono">20.0%</span> 로 GOLD <span class="mono">1.5 · 70.6%</span> 에
+              크게 못 미칩니다. <span style="color:#8fdff0">이번 주 과제입니다.</span></div>
+          </div>
+
+          <div style="display:flex;gap:15px;padding:15px 18px;border-radius:11px;background:#0d1013;border:1px solid #1a1e24">
+            <span class="mono" style="font-size:13px;color:#5a626d;flex:0 0 auto">2</span>
+            <div style="font-size:13.5px;color:#8a919c;line-height:1.8;text-wrap:pretty">
+              <span class="mono" style="font-size:10px;color:#d9a877;padding:1px 7px;border-radius:4px;
+                    background:rgba(200,138,74,.12);margin-right:6px">다음 주 이후</span>
+              <strong style="color:#a8b0bb">라인전 생존</strong> — 탑 15분 이전 데스 <span class="mono">6.00</span> 으로
+              BRONZE <span class="mono">2.33</span>, GOLD <span class="mono">2.47</span> 의 두 배 이상이며
+              15분 골드 차이 <span class="mono">−1293</span> (GOLD <span class="mono">+857</span>)입니다.</div>
+          </div>
+
+          <div style="display:flex;gap:15px;padding:15px 18px;border-radius:11px;background:#0d1013;border:1px solid #1a1e24">
+            <span class="mono" style="font-size:13px;color:#5a626d;flex:0 0 auto">3</span>
+            <div style="font-size:13.5px;color:#8a919c;line-height:1.8;text-wrap:pretty">
+              <span class="mono" style="font-size:10px;color:#d9a877;padding:1px 7px;border-radius:4px;
+                    background:rgba(200,138,74,.12);margin-right:6px">다음 주 이후</span>
+              <strong style="color:#a8b0bb">오브젝트 합류</strong> — 탑 r1200 참여율 <span class="mono">5.4%</span> 로
+              GOLD <span class="mono">19.0%</span> 대비 낮습니다 <span class="mono" style="color:#6f7783">(추정)</span>.</div>
+          </div>
+        </div>
+      </div>
+
+      <div style="padding:16px 18px;border-radius:11px;background:#0d1013;border:1px solid #1a1e24">
+        <div style="font-size:11px;font-weight:600;color:#6f7783;letter-spacing:.16em;margin-bottom:9px">주의</div>
+        <div style="font-size:12.5px;color:#7c8490;line-height:1.85;text-wrap:pretty">
+          탑 5판 · 미드 3판은 표본 부족이라 승률 · 데스로 아직 판단할 수 없습니다.
+          참여율 · 시야 없이 죽은 비율 · 귀환은 <span class="mono">(추정)</span> 이므로
+          절대값이 아닌 벤치 격차만 보세요. 탑의 SILVER · GOLD 벤치도 각 18 · 17판이라 흔들릴 수 있습니다.</div>
+      </div>
+    </div>
+
+    <!-- 코치가 지키는 규칙 -->
+    <div style="width:326px;display:flex;flex-direction:column;gap:14px">
+      <div style="border-radius:13px;border:1px solid #1c2027;background:#0f1216;padding:19px 21px">
+        <div style="font-size:11px;font-weight:600;color:#6f7783;letter-spacing:.16em;margin-bottom:15px">이 메모가 지킨 것</div>
+        <div style="display:flex;flex-direction:column;gap:11px">
+          <div style="display:flex;align-items:center;gap:11px">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M3.4 8.4 6.4 11.4l6.2-6.8" stroke="#5fd08a" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            <span style="font-size:12.5px;color:#a8b0bb;flex-grow:1">분량</span>
+            <span class="mono" style="font-size:12px;color:#7ddba4">870 / 900자</span></div>
+          <div style="display:flex;align-items:center;gap:11px">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M3.4 8.4 6.4 11.4l6.2-6.8" stroke="#5fd08a" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            <span style="font-size:12.5px;color:#a8b0bb;flex-grow:1">이번 주 과제</span>
+            <span class="mono" style="font-size:12px;color:#7ddba4">1개</span></div>
+          <div style="display:flex;align-items:center;gap:11px">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M3.4 8.4 6.4 11.4l6.2-6.8" stroke="#5fd08a" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            <span style="font-size:12.5px;color:#a8b0bb;flex-grow:1">라인 추천</span>
+            <span class="mono" style="font-size:12px;color:#7ddba4">없음</span></div>
+          <div style="display:flex;align-items:center;gap:11px">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M3.4 8.4 6.4 11.4l6.2-6.8" stroke="#5fd08a" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            <span style="font-size:12.5px;color:#a8b0bb;flex-grow:1">인용 수치 검증</span>
+            <span class="mono" style="font-size:12px;color:#7ddba4">12 / 12</span></div>
+          <div style="display:flex;align-items:center;gap:11px">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M3.4 8.4 6.4 11.4l6.2-6.8" stroke="#5fd08a" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            <span style="font-size:12.5px;color:#a8b0bb;flex-grow:1">존댓말</span>
+            <span class="mono" style="font-size:12px;color:#7ddba4">위반 0</span></div>
+        </div>
+      </div>
+
+      <div style="border-radius:13px;border:1px solid #1c2027;background:#0f1216;padding:19px 21px">
+        <div style="font-size:11px;font-weight:600;color:#6f7783;letter-spacing:.16em;margin-bottom:13px">1회 비용</div>
+        <div style="display:flex;align-items:baseline;gap:7px">
+          <span class="mono" style="font-size:29px;font-weight:600">$0.09</span>
+          <span style="font-size:11.5px;color:#5a626d">/ 회</span></div>
+        <div class="mono" style="font-size:11px;color:#6f7783;line-height:1.9;margin-top:11px">
+          입력 12,459 × $5/1M<br>출력 1,148 × $25/1M</div>
+      </div>
+
+      <div style="border-radius:13px;border:1px solid #1c2027;background:#0f1216;padding:19px 21px">
+        <div style="font-size:11px;font-weight:600;color:#6f7783;letter-spacing:.16em;margin-bottom:12px">다음 메모</div>
+        <div style="font-size:12.5px;color:#7c8490;line-height:1.8;text-wrap:pretty">
+          탑 15판을 채우고 <span class="mono" style="color:#a8b0bb">collect_me</span> 로 수집한 뒤
+          다시 생성하면, 위 두 숫자가 얼마나 움직였는지로 확인합니다.</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

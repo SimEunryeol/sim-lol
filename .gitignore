@@ -15,3 +15,7 @@ venv/
 
 # 샘플 리포트는 커밋한다
 !data/report_SAMPLE.md
+
+# 디자인 캔버스 결과물은 재생성 가능하다 (design/ 의 원본에서 seed)
+sim-diamond-dashboard.html
+design/img/_p*.html
