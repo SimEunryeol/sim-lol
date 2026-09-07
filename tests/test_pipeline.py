@@ -320,6 +320,12 @@ def main() -> int:
         check("사용자 입력에 현재 라인·남은 판수 주입",
               "지금 탐색 중인 라인" in content and "라인 추천 금지" in content,
               content.split("---- 리포트")[0][-200:])
+        check("주간 과제를 사용자 입력에 주입(코치가 새로 고르지 못하게)",
+              coach.WEEKLY_TASK in content and "새로 고르지 마세요" in content,
+              content.split("[탐색 상태")[0][-160:])
+        check("코치 프롬프트가 과제 임의 변경을 금지",
+              "새로 고르거나 다른 것으로 바꾸지 마세요" in coach.SYSTEM_PROMPT
+              and "과제를 바꾸지" in coach.SYSTEM_PROMPT)
         check("코치 프롬프트에 추정 지표 주의", "_(추정)_" in coach.SYSTEM_PROMPT)
         check("코치 프롬프트에 탐색 진행 현황 항목", "탐색 단계 진행 현황" in coach.SYSTEM_PROMPT)
         print(f"  리포트 {len(text.encode('utf-8'))} bytes → {args.report}")
