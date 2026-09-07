@@ -341,6 +341,14 @@ def main() -> int:
               cleaned == {"a": None, "b": [None, 1.5], "c": True}, str(cleaned))
         check("대시보드는 루프백에만 바인딩한다(인증이 없다)",
               web.DEFAULT_HOST == "127.0.0.1", web.DEFAULT_HOST)
+        # 이번 주 과제는 숫자로 확인할 수 있어야 한다 (SPEC.md: 무엇을/목표치/확인할 숫자)
+        check("주간 과제에 측정 목표치가 붙어 있다",
+              len(web.WEEKLY_TASK_METRICS) >= 1
+              and all({"label", "col", "target"} <= set(m) for m in web.WEEKLY_TASK_METRICS))
+        pm_cols = {r[1] for r in conn.execute("PRAGMA table_info(participant_metrics)")}
+        check("경기별 과제 판정이 실제 지표 컬럼을 본다",
+              web.WEEKLY_TASK_CHECK["column"] in pm_cols,
+              web.WEEKLY_TASK_CHECK["column"])
         print(f"  리포트 {len(text.encode('utf-8'))} bytes → {args.report}")
 
     if not args.keep:

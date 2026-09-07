@@ -18,7 +18,12 @@
     --win:#5fd08a; --lose:#f0736a; --lose-t:#f0a58a;
   }
   *{box-sizing:border-box}
-  html{background:var(--bg)}
+  /* 한글은 기본값이면 어절 한가운데서 잘린다("제어 와드를 매 귀 / 환마다").
+     keep-all 이면 띄어쓰기에서만 끊긴다. pretty 는 마지막 줄에 한 단어만
+     남는 것을 막는다. */
+  html{background:var(--bg);word-break:keep-all;overflow-wrap:break-word}
+  p,li,td,th,div,span,h1,h2,h3{text-wrap:pretty}
+  h1,h2,.champ-name,.big{text-wrap:balance}
   body{margin:0;color:var(--fg);font:14px/1.6 "IBM Plex Sans KR","Malgun Gothic",system-ui,sans-serif;
        -webkit-font-smoothing:antialiased;
        background:
@@ -295,21 +300,39 @@ async function loadToday(){
         <div class="mono muted" style="font-size:12px;white-space:nowrap">탐색
           <span style="color:var(--fg);font-size:14px;font-weight:600">${p.done}</span> / ${p.target}판</div>
       </div>
-      ${p.complete?"":`<div class="muted" style="font-size:12.5px">75판을 채우기 전에는 라인을 결정하지 않습니다.</div>`}
+      ${p.complete?"":`<div class="muted" style="font-size:12.5px">75판을 다 하기 전에는 라인을 정하지 않습니다.</div>`}
     </div>`;
 
-  const detail = section(d.memo_detail, "이번 주 과제");
-  const task = `<div class="card" style="overflow:hidden">
-      <div class="row" style="gap:10px;padding:15px 24px 0">
-        <span class="tick"></span><span class="eyebrow">이번 주 과제</span>
-        <span class="mono faint" style="margin-left:auto;font-size:11px">한 번에 하나만 고칩니다</span>
+  const fmtT = (m,v) => v==null ? "—" : (m.pct ? (v*100).toFixed(0)+"%" : v.toFixed(2));
+  const targets = (d.task_targets||[]).map(m=>`
+    <div style="flex:1 1 240px;padding:16px 20px;border-radius:12px;
+         background:var(--panel2);border:1px solid var(--line)">
+      <div style="font-size:12px;color:var(--dim);margin-bottom:12px">${esc(m.label)}</div>
+      <div class="row" style="gap:12px;flex-wrap:nowrap">
+        <div>
+          <div class="faint" style="font-size:10.5px;margin-bottom:2px">지금</div>
+          <div class="mono" style="font-size:24px;color:var(--lose-t)">${fmtT(m,m.now)}</div></div>
+        <svg width="20" height="10" viewBox="0 0 20 10" fill="none" style="flex:0 0 20px;margin-top:12px">
+          <path d="M0 5h16m0 0-4-4m4 4-4 4" stroke="#5a626d" stroke-width="1.5" stroke-linecap="round"/></svg>
+        <div>
+          <div class="faint" style="font-size:10.5px;margin-bottom:2px">목표</div>
+          <div class="mono" style="font-size:32px;font-weight:600;color:var(--dia-t);line-height:1">${fmtT(m,m.target)}</div></div>
       </div>
-      <div style="padding:12px 24px 22px">
-        <div style="font-size:19px;font-weight:600;line-height:1.55;letter-spacing:-.01em">
-          ${esc(d.weekly_task)}</div>
-        ${detail ? `<div style="margin-top:10px;font-size:13.5px;color:var(--fg2);line-height:1.8">
-          ${md(detail).replace(/^<div class="md">|<\/div>$/g,"")}</div>` : ""}
-      </div></div>`;
+      <div class="faint" style="font-size:10.5px;margin-top:10px">
+        골드 평균 ${fmtT(m,m.bench)}${m.position?` · 지금 값은 ${esc(rko(m.position))} ${m.games}판 기준`:""}</div>
+    </div>`).join("");
+
+  const task = `<div class="task" style="padding:22px 26px">
+      <div class="row" style="gap:10px;margin-bottom:14px">
+        <span class="tick"></span>
+        <span class="eyebrow" style="color:var(--dia-t)">이번 주에 고칠 것 — 딱 하나</span>
+      </div>
+      <div class="big" style="font-size:26px;font-weight:700;line-height:1.5;letter-spacing:-.02em">
+        ${esc(d.weekly_task)}</div>
+      ${targets ? `<div class="row" style="gap:14px;margin-top:20px;align-items:stretch">${targets}</div>
+        <div class="muted" style="font-size:12.5px;margin-top:14px">
+          다음 리포트에서 이 두 숫자만 봅니다.</div>` : ""}
+    </div>`;
 
   const rows = (d.recent||[]).map(m=>`
     <tr${m.score?' style="background:linear-gradient(90deg,rgba(111,211,232,.05),rgba(111,211,232,0) 60%)"':''}>
@@ -319,32 +342,53 @@ async function loadToday(){
       <td class="mono muted" style="font-size:11.5px">${esc(m.role)}</td>
       <td style="font-size:12.5px;font-weight:600;color:${m.win?'var(--win)':'var(--lose)'}">${m.win?"승":"패"}</td>
       <td class="mono num" style="font-size:12.5px;color:var(--fg2)">${esc(m.kda)}</td>
+      <td>${taskCell(m.task, d.task_check)}</td>
       <td><div class="stars">${[1,2,3,4,5].map(n=>
         `<button data-match="${esc(m.match_id)}" data-score="${n}" class="${m.score===n?"on":""}">${n}</button>`
       ).join("")}</div></td>
       <td class="muted" style="font-size:12px">${esc(m.memo||"")}</td>
     </tr>`).join("");
 
-  $("#today").innerHTML = hero + task + `
+  $("#today").innerHTML = task + hero + `
     <div class="card pad">
       <div class="row" style="margin-bottom:14px">
         <span class="eyebrow">최근 경기</span>
-        <span style="font-size:12.5px;color:var(--dim)">판 끝나고 재미 점수 하나 —
+        <span style="font-size:12.5px;color:var(--dim)">한 판 끝나면 재미 점수 하나만 누르세요 —
           <span style="color:var(--fg2)">30초면 끝납니다</span></span>
-        <span class="mono faint" style="margin-left:auto;font-size:11px">평점 미기록 ${(d.unrated||[]).length}판</span>
+        <span class="row" style="margin-left:auto;gap:14px">
+          ${(()=>{ const done=(d.recent||[]).filter(m=>m.task&&m.task.ok).length,
+                         judged=(d.recent||[]).filter(m=>m.task&&m.task.value!=null).length;
+            return judged ? `<span class="mono" style="font-size:11.5px;color:var(--dim)">과제 달성
+              <b style="color:${done?"var(--win)":"var(--lose)"};font-size:13px">${done}</b> / ${judged}판</span>` : ""; })()}
+          <span class="mono faint" style="font-size:11px">평점 미기록 ${(d.unrated||[]).length}판</span></span>
       </div>
       <div class="row" style="margin-bottom:12px">
         <input type="text" id="rateMemo" placeholder="메모 (선택) — 점수를 누르면 같이 저장됩니다"></div>
       <div class="scroll"><table>
         <thead><tr><th>시각</th><th>챔프</th><th>라인</th><th>결과</th>
-          <th class="num">K / D / A</th><th style="text-align:right">재미</th><th>메모</th></tr></thead>
-        <tbody>${rows || `<tr><td colspan="7" class="muted">경기가 없습니다.</td></tr>`}</tbody>
+          <th class="num">K / D / A</th><th>과제</th>
+          <th style="text-align:right">재미</th><th>메모</th></tr></thead>
+        <tbody>${rows || `<tr><td colspan="8" class="muted">경기가 없습니다.</td></tr>`}</tbody>
       </table></div>
     </div>`;
 
   $("#today").querySelectorAll(".stars button").forEach(b=>{
     b.onclick = () => sendRate(b.dataset.match, Number(b.dataset.score));
   });
+}
+
+// 판 하나가 이번 주 과제를 지켰는지 — 초록 체크 / 빨간 X 로 바로 보이게
+function taskCell(task, cfg){
+  if(!task || task.value === null || task.value === undefined)
+    return `<span class="faint" style="font-size:12px">—</span>`;
+  const ok = task.ok, c = ok ? "var(--win)" : "var(--lose)";
+  const mark = ok
+    ? '<path d="M3.4 8.4 6.4 11.4l6.2-6.8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>'
+    : '<path d="M4.6 4.6l6.8 6.8M11.4 4.6l-6.8 6.8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>';
+  return `<span class="row" style="gap:6px;color:${c};flex-wrap:nowrap"
+      title="${esc(cfg?.label||"")} ${task.value}${esc(cfg?.unit||"")} · 목표 ${cfg?.min}${esc(cfg?.unit||"")} 이상">
+    <svg width="15" height="15" viewBox="0 0 16 16" fill="none">${mark}</svg>
+    <span class="mono" style="font-size:12.5px">${task.value}${esc(cfg?.unit||"")}</span></span>`;
 }
 
 async function sendRate(match_id, score){
@@ -409,7 +453,7 @@ async function loadExplore(){
           5개 라인을 <span class="mono" style="font-size:21px;color:var(--dia-t)">15판</span>씩 돌려보고
           <span style="color:var(--dia-t)">데이터로</span> 고릅니다</div>
         <div class="muted" style="font-size:13.5px;margin-top:9px;line-height:1.7">
-          익숙한 라인을 마지막에 두는 건 익숙한 데로 도망가지 않기 위해서입니다.</div>
+          한 라인씩 순서대로 15판. 정글을 마지막에 둔 건 익숙한 라인으로 도망가지 않기 위해서입니다.</div>
       </div>
       <div class="row" style="gap:26px;align-items:flex-end">
         <div style="text-align:right">
@@ -428,8 +472,9 @@ async function loadExplore(){
     </div>
     <div style="display:flex;flex-direction:column;gap:9px">${head}${rows}</div>
     <div style="display:flex;gap:16px;flex-wrap:wrap">
-      <div class="card pad" style="flex-grow:1;min-width:400px">
-        <div class="eyebrow" style="margin-bottom:13px">적합도 계산</div>
+      <div class="card pad" style="flex:1 1 420px">
+        <div class="eyebrow" style="margin-bottom:5px">적합도가 뭔가요</div>
+        <div class="muted" style="font-size:12.5px;margin-bottom:13px">이 라인이 나한테 맞는지를 0~1 로 나타낸 숫자입니다.</div>
         <div class="row" style="gap:11px;margin-bottom:14px">
           <span class="mono" style="font-size:13px;color:var(--fg2);padding:5px 11px;border-radius:7px;
                 background:var(--panel2);border:1px solid var(--line)">지표 70%</span>
@@ -437,16 +482,16 @@ async function loadExplore(){
           <span class="mono" style="font-size:13px;color:var(--fg2);padding:5px 11px;border-radius:7px;
                 background:var(--panel2);border:1px solid var(--line)">재미 30%</span></div>
         <div class="muted" style="font-size:12.5px;line-height:1.75">
-          승률이 아니라 절대 지표(CS · 데스 시점 · 시야 · 골드차)를 벤치와 비교합니다.
-          단위가 다른 값을 더할 수 있게 <span style="color:var(--fg2)">브론즈 벤치 = 0, 골드 벤치 = 1</span>
-          축 위로 옮깁니다.</div>
+          승률로 고르지 않습니다. CS · 데스 시점 · 시야 · 골드차처럼 실력이 직접 드러나는 숫자를
+          같은 서버 브론즈 · 골드 표본과 비교합니다.
+          <span style="color:var(--fg2)">0이면 브론즈, 1이면 골드 수준</span>이라는 뜻입니다.</div>
         <div class="row" style="gap:0;margin-top:15px;flex-wrap:nowrap">
           <span class="mono" style="font-size:10.5px;color:var(--bronze-t);letter-spacing:.08em">BRONZE 0</span>
           <div style="flex-grow:1;height:4px;margin:0 12px;border-radius:999px;
                background:linear-gradient(90deg,var(--bronze),#8a8f6a,var(--dia))"></div>
           <span class="mono" style="font-size:10.5px;color:var(--dia-t);letter-spacing:.08em">GOLD 1</span></div>
       </div>
-      ${d.complete?"":`<div style="width:392px;border-radius:13px;border:1px solid rgba(200,138,74,.22);
+      ${d.complete?"":`<div style="flex:0 1 392px;min-width:300px;border-radius:13px;border:1px solid rgba(200,138,74,.22);
         background:rgba(200,138,74,.045);padding:19px 22px">
         <div class="row" style="gap:9px;margin-bottom:12px;flex-wrap:nowrap">
           <svg width="15" height="15" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6.6"
@@ -454,8 +499,8 @@ async function loadExplore(){
             stroke-width="1.5" stroke-linecap="round"/></svg>
           <span style="font-size:12.5px;font-weight:600;color:var(--bronze-t)">아직 판단하지 않습니다</span></div>
         <div style="font-size:12.5px;color:#9a8a76;line-height:1.75">
-          75판을 채우기 전에는 어떤 라인도 추천하지 않습니다.
-          15판 미만 표본으로는 승률이 크게 흔들려 결론을 낼 수 없습니다.</div>
+          75판을 다 하기 전에는 라인을 정하지 않습니다.
+          15판도 안 해보고 고르면 운에 휘둘린 승률로 고르는 셈이 됩니다.</div>
         <div style="margin-top:15px;padding-top:14px;border-top:1px solid rgba(200,138,74,.16)">
           <span class="mono" style="font-size:26px;font-weight:600;color:var(--bronze-t)">${d.target-d.done}</span>
           <span style="font-size:12.5px;color:#9a8a76"> 판 남았습니다</span></div>
@@ -488,7 +533,7 @@ async function loadReport(){
   const gaps = !(d.gaps||[]).length ? "" : `<div class="card pad" style="padding:22px 24px">
     <div class="row" style="gap:12px;margin-bottom:20px;align-items:baseline">
       <span class="eyebrow">확실히 밀리는 것</span>
-      <span class="muted" style="font-size:12.5px">벤치와 격차가 있는 것만 봅니다</span></div>
+      <span class="muted" style="font-size:12.5px">같은 서버 표본보다 확실히 떨어지는 것만 골랐습니다</span></div>
     <div style="display:flex;flex-direction:column;gap:20px">${d.gaps.map((g,i)=>{
       const f = v => g.pct ? pct(v) : num(v,g.digits);
       const max = Math.max(g.mine,g.bench)||1;
@@ -519,7 +564,7 @@ async function loadReport(){
   const lanes = !(d.lanes||[]).length ? "" : `<div class="card" style="overflow:hidden">
     <div class="row" style="gap:12px;padding:20px 24px 14px;align-items:baseline">
       <span class="eyebrow">라인별</span>
-      <span class="muted" style="font-size:12.5px">15판 미만은 판단 근거로 쓰지 않습니다</span></div>
+      <span class="muted" style="font-size:12.5px">15판도 안 한 라인은 숫자를 믿지 마세요</span></div>
     <div class="scroll" style="padding:0 24px 8px"><table>
       <thead><tr><th>라인</th><th class="num">판수</th><th class="num">승률</th>
         <th class="num">판당 데스</th><th class="num">15분 골드차</th></tr></thead>
@@ -534,7 +579,7 @@ async function loadReport(){
 
   $("#report").innerHTML = stats + gaps + lanes +
     `<div class="card pad"><details><summary style="cursor:pointer;color:var(--dim);font-size:12.5px;
-       padding:2px 0">리포트 전문 보기</summary>${md(d.markdown)}</details></div>`;
+       padding:2px 0">숫자 전부 보기 (긴 리포트)</summary>${md(d.markdown)}</details></div>`;
 }
 
 // ------------------------------------------------------------- 코치 --
@@ -563,7 +608,8 @@ async function loadCoach(){
       </div>
       <div style="width:326px;display:flex;flex-direction:column;gap:14px">
         <div class="card pad">
-          <div class="eyebrow" style="margin-bottom:15px">이 메모가 지킨 것</div>
+          <div class="eyebrow" style="margin-bottom:5px">이 메모 믿어도 되나요</div>
+          <div class="muted" style="font-size:12.5px;margin-bottom:14px">약속한 규칙을 지켰는지 자동으로 확인합니다.</div>
           ${[["분량", `${memo.length} / 900자`, memo.length<=900],
              ["이번 주 과제", (memo.match(/\*\*이번 주 과제\*\*/g)||[]).length+"개",
               (memo.match(/\*\*이번 주 과제\*\*/g)||[]).length===1],
