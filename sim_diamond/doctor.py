@@ -68,6 +68,27 @@ def suggest_fix(key: str) -> str | None:
     return None
 
 
+def check_example_file() -> None:
+    """`.env.example` 은 git 이 관리하는 템플릿이다. 여기에 진짜 키를 넣으면
+    (1) pull 이 막히고 (2) 실수로 커밋하면 키가 공개된다."""
+    path = config.ROOT / ".env.example"
+    if not path.exists():
+        return
+    text = path.read_text(encoding="utf-8-sig", errors="replace")
+    real = [line.split("=", 1)[0].strip() for line in text.splitlines()
+            if "=" in line and not line.strip().startswith("#")
+            and line.split("=", 1)[1].strip() not in ("", config.PLACEHOLDER_KEY)
+            and not line.split("=", 1)[1].strip().startswith(("RGAPI-xxx", "sk-ant-xxx"))
+            and line.split("=", 1)[0].strip().endswith(("API_KEY", "KEY"))]
+    if real:
+        print("\n  ★ .env.example 에 실제 값이 들어 있습니다: " + ", ".join(real))
+        print("    .env.example 은 git 이 관리하는 '빈 템플릿'입니다. 진짜 키는 .env 에만 넣으세요.")
+        print("    이대로 두면 git pull 이 막히고, 실수로 커밋하면 키가 공개됩니다.")
+        print(f"    되돌리기:  copy \"{path}\" \"{path}.bak\"  후  git checkout -- .env.example"
+              if os.name == "nt" else
+              f"    되돌리기:  cp {path} {path}.bak && git checkout -- .env.example")
+
+
 def check_env_file() -> str | None:
     path = config.ROOT / ".env"
     print("[1] .env 파일")
@@ -186,6 +207,7 @@ def main() -> int:
     print(f"  파이썬 {sys.version.split()[0]} · 작업 폴더 {config.ROOT}")
     print("=" * 66)
     check_env_file()
+    check_example_file()
     key, problems = check_key()
     if not key:
         print("\n키가 없어 호출 테스트를 건너뜁니다.")

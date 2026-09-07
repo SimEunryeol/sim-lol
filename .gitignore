@@ -1,4 +1,6 @@
 .env
+.env.local
+*.bak
 data/*.db
 data/*.db-journal
 data/*.db-wal

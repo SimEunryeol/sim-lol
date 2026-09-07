@@ -16,6 +16,10 @@ copy .env.example .env
 notepad .env
 ```
 
+> **`.env` 와 `.env.example` 은 다른 파일이다.** `.env.example` 은 git 이 관리하는 빈
+> 템플릿이라 여기에 진짜 키를 넣으면 `git pull` 이 막히고, 실수로 커밋하면 키가 공개된다.
+> 키는 `.env` 에만 넣는다. (`python -m sim_diamond.doctor` 가 이 실수를 잡아준다.)
+>
 > 메모장으로 `.env` 를 저장할 때 파일 형식을 **"모든 파일"** 로 두어야 한다.
 > 안 그러면 `.env.txt` 로 저장돼서 키를 못 읽는다. (그 경우 프로그램이 알아서 알려준다.)
 
