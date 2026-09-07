@@ -1,0 +1,15 @@
+.env
+data/*.db
+data/*.db-journal
+data/*.db-wal
+data/*.db-shm
+data/report_*.md
+data/ddragon/
+__pycache__/
+*.pyc
+.venv/
+venv/
+.pytest_cache/
+
+# 샘플 리포트는 커밋한다
+!data/report_SAMPLE.md
