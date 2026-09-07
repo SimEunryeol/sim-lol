@@ -14,6 +14,7 @@ from datetime import datetime
 import pandas as pd
 
 from . import config, geo
+from . import metrics as metrics_mod
 from .db import session
 from .ddragon import Static
 
@@ -23,6 +24,9 @@ POSITION_KO = {
 }
 POSITION_ORDER = ["TOP", "JUNGLE", "MIDDLE", "BOTTOM", "UTILITY"]
 MIN_CHAMP_GAMES = 5
+MIN_POSITION_GAMES = 10   # 이 미만이면 "표본 부족" 표시
+MIN_BENCH_GAMES = 20      # 벤치 열도 마찬가지
+SMALL = " ⚠"
 
 # 벤치 열 순서. 알파벳순으로 두면 BRONZE·GOLD·SILVER 가 되어 실력 순서가 뒤집힌다.
 TIER_ORDER = ["IRON", "BRONZE", "SILVER", "GOLD", "PLATINUM", "EMERALD",
@@ -116,8 +120,14 @@ def cmp_rows(me: dict, benches: dict[str, dict], spec: list[tuple[str, str, call
     return rows
 
 
-def cmp_headers(tiers: list[str]) -> list[str]:
-    return ["항목", "나"] + [f"{t} 벤치" for t in tiers]
+def cmp_headers(tiers: list[str], counts: dict[str, int] | None = None) -> list[str]:
+    """벤치 열 제목에 표본 수를 같이 적는다. 8판짜리 평균과 50판짜리 평균은 다르게 읽어야 한다."""
+    out = ["항목", "나"]
+    for t in tiers:
+        n = (counts or {}).get(t)
+        mark = SMALL if n is not None and n < MIN_BENCH_GAMES else ""
+        out.append(f"{t} 벤치" + (f" ({n}판{mark})" if n is not None else ""))
+    return out
 
 
 # ---------------------------------------------------------------- 섹션들 --
@@ -153,9 +163,10 @@ def s_positions(me: pd.DataFrame, df: pd.DataFrame, tiers: list[str]) -> str:
         sub = me[me["team_position"] == pos]
         if sub.empty:
             continue
-        rows.append([POSITION_KO[pos], len(sub), pct(sub["win"].mean()),
-                     fmt(sub["deaths"].mean(), 1)])
+        rows.append([POSITION_KO[pos] + (SMALL if len(sub) < MIN_POSITION_GAMES else ""),
+                     len(sub), pct(sub["win"].mean()), fmt(sub["deaths"].mean(), 1)])
     out.append(table(["라인", "판수", "승률", "판당 데스"], rows))
+    out.append(f"\n⚠ = {MIN_POSITION_GAMES}판 미만. 승률·평균이 크게 흔들리므로 참고만 한다.\n")
 
     spec = [
         ("games", "판수", lambda v: fmt(int(v), 0) if v else "—"),
@@ -173,9 +184,12 @@ def s_positions(me: pd.DataFrame, df: pd.DataFrame, tiers: list[str]) -> str:
         sub = me[me["team_position"] == pos]
         if sub.empty:
             continue
-        out.append(f"\n**{POSITION_KO[pos]} ({len(sub)}판)**\n")
-        benches = {t: agg(bench_slice(df, t, pos)) for t in tiers}
-        out.append(table(cmp_headers(tiers), cmp_rows(agg(sub), benches, spec)))
+        note = (f"  ⚠ _표본 {len(sub)}판 — 참고만_" if len(sub) < MIN_POSITION_GAMES else "")
+        out.append(f"\n**{POSITION_KO[pos]} ({len(sub)}판)**{note}\n")
+        slices = {t: bench_slice(df, t, pos) for t in tiers}
+        benches = {t: agg(d) for t, d in slices.items()}
+        counts = {t: len(d) for t, d in slices.items()}
+        out.append(table(cmp_headers(tiers, counts), cmp_rows(agg(sub), benches, spec)))
     return "\n".join(out)
 
 
@@ -272,8 +286,10 @@ def s_jungle(me: pd.DataFrame, df: pd.DataFrame, tiers: list[str]) -> str:
         return out
 
     body = [f"정글 **{len(jg)}판** · 승률 **{pct(jg['win'].mean())}**\n"]
-    body.append(table(cmp_headers(tiers),
-                      cmp_rows(jagg(jg), {t: jagg(bench_slice(df, t)) for t in tiers}, spec)))
+    jslices = {t: bench_slice(df, t) for t in tiers}
+    jcounts = {t: int((d["is_jungle"] == 1).sum()) for t, d in jslices.items()}
+    body.append(table(cmp_headers(tiers, jcounts),
+                      cmp_rows(jagg(jg), {t: jagg(d) for t, d in jslices.items()}, spec)))
     body.append(
         "\n- 첫 갱 = 3분 이후 **라인(탑/미드/봇)** 에서 내가 딴 첫 킬/어시. "
         "정글·강에서 난 교전과 내 데스는 세지 않는다.\n"
@@ -294,7 +310,8 @@ def s_trend(me: pd.DataFrame) -> str:
     rows = []
     for month, sub in d.groupby("month"):
         rows.append(
-            [month, len(sub), pct(sub["win"].mean()), fmt(sub["deaths"].mean(), 2),
+            [month + (SMALL if len(sub) < MIN_POSITION_GAMES else ""),
+             len(sub), pct(sub["win"].mean()), fmt(sub["deaths"].mean(), 2),
              fmt(sub["cs_per_min"].mean(), 2), fmt(sub["vision_per_min"].mean(), 3)]
         )
     return table(["월", "판수", "승률", "판당 데스", "분당 CS", "시야/분"], rows)
@@ -305,7 +322,8 @@ def s_notes(static: Static) -> str:
         "- 와드 위치: 타임라인의 `WARD_PLACED` 이벤트에는 좌표가 없다. 설치자의 그 시각 위치"
         "(분 단위 프레임 + 킬 이벤트 좌표를 선형보간)로 **근사**한 값이다.\n"
         "- 오브젝트 참여: 본인 좌표도 같은 방식의 근사값이며, 킬러 본인·어시스트 기록자는 무조건 참여로 본다.\n"
-        "- 첫 풀캠프: 정글 CS 가 12에 도달한 시각을 프레임 사이 선형보간으로 추정한다.\n"
+        f"- 첫 풀캠프: 정글 몬스터 처치 수가 {metrics_mod.FULL_CLEAR_JUNGLE_CS}마리"
+        f"(6캠프 전체 분량)에 도달한 시각을 프레임 사이 선형보간으로 추정한다.\n"
         "- 귀환: 타임라인에 귀환 이벤트가 없어 상점 구매 묶음(간격 20초 초과 시 분리)을 기지 방문으로 본다. "
         "직전 방문 이후 죽은 적이 있으면 부활로 돌아온 것이므로 자발적 귀환에서 뺀다.\n"
         f"- 리메이크/조기종료({config.REMAKE_MAX_S // 60}분 미만)는 모든 집계에서 제외한다.\n"
@@ -323,6 +341,8 @@ def build(conn: sqlite3.Connection) -> str:
     remakes = metrics[metrics["duration_s"].fillna(0) < config.REMAKE_MAX_S]
     n_my_remakes = int((remakes["p_is_me"] == 1).sum())
     metrics = metrics[metrics["duration_s"].fillna(0) >= config.REMAKE_MAX_S]
+    # 데스 상세도 같은 기준으로 걸러야 분자/분모가 맞는다.
+    deaths = deaths[deaths["match_id"].isin(set(metrics["match_id"]))]
     me = metrics[metrics["p_is_me"] == 1].copy()
     bench_tiers = sort_tiers(
         t for t in metrics[metrics["p_is_bench"] == 1]["p_tier"].dropna().unique()
