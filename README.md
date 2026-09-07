@@ -106,6 +106,16 @@ BRONZE 를 안 모았으면 IRON→SILVER 처럼 있는 티어로 축을 잡는�
 
 `phase set-champs` 로 기준 챔프를 바꾸면 그 즉시 위반 집계가 다시 계산된다.
 
+## 상태 공유 (복붙 없이)
+
+```bat
+scripts\send.bat
+```
+
+`doctor` + `check` + `explore` + git 상태를 `logs/status.txt` 하나로 모아 GitHub 에 올린다.
+터미널 출력을 손으로 복사해 붙일 필요가 없다. **API 키로 보이는 문자열
+(`RGAPI-…`, `sk-ant-…`, UUID)은 저장 전에 전부 가린다.**
+
 ## 잘 안 될 때: 진단부터
 
 ```bat
