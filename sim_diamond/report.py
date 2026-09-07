@@ -24,6 +24,14 @@ POSITION_KO = {
 POSITION_ORDER = ["TOP", "JUNGLE", "MIDDLE", "BOTTOM", "UTILITY"]
 MIN_CHAMP_GAMES = 5
 
+# 벤치 열 순서. 알파벳순으로 두면 BRONZE·GOLD·SILVER 가 되어 실력 순서가 뒤집힌다.
+TIER_ORDER = ["IRON", "BRONZE", "SILVER", "GOLD", "PLATINUM", "EMERALD",
+              "DIAMOND", "MASTER", "GRANDMASTER", "CHALLENGER"]
+
+
+def sort_tiers(tiers) -> list[str]:
+    return sorted(tiers, key=lambda t: (TIER_ORDER.index(t) if t in TIER_ORDER else 99, t))
+
 
 # ------------------------------------------------------------------ 유틸 --
 def fmt(value, digits: int = 2, suffix: str = "", plus: bool = False) -> str:
@@ -99,11 +107,17 @@ def agg(df: pd.DataFrame) -> dict:
     }
 
 
-def cmp_rows(me: dict, silver: dict, gold: dict, spec: list[tuple[str, str, callable]]) -> list[list[str]]:
+def cmp_rows(me: dict, benches: dict[str, dict], spec: list[tuple[str, str, callable]]) -> list[list[str]]:
+    """항목 | 나 | <티어1> 벤치 | <티어2> 벤치 | … — 벤치 열은 수집된 티어만큼 생긴다."""
     rows = []
     for key, label, render in spec:
-        rows.append([label, render(me.get(key)), render(silver.get(key)), render(gold.get(key))])
+        rows.append([label, render(me.get(key))]
+                    + [render(benches[t].get(key)) for t in benches])
     return rows
+
+
+def cmp_headers(tiers: list[str]) -> list[str]:
+    return ["항목", "나"] + [f"{t} 벤치" for t in tiers]
 
 
 # ---------------------------------------------------------------- 섹션들 --
@@ -130,7 +144,7 @@ def s_summary(me: pd.DataFrame, conn: sqlite3.Connection, bench_tiers: list[str]
     return "\n".join(lines) + "\n"
 
 
-def s_positions(me: pd.DataFrame, df: pd.DataFrame) -> str:
+def s_positions(me: pd.DataFrame, df: pd.DataFrame, tiers: list[str]) -> str:
     if me.empty:
         return "_데이터 없음_\n"
     out = ["**라인별 판수/승률**\n"]
@@ -160,13 +174,8 @@ def s_positions(me: pd.DataFrame, df: pd.DataFrame) -> str:
         if sub.empty:
             continue
         out.append(f"\n**{POSITION_KO[pos]} ({len(sub)}판)**\n")
-        out.append(
-            table(
-                ["항목", "나", "SILVER 벤치", "GOLD 벤치"],
-                cmp_rows(agg(sub), agg(bench_slice(df, "SILVER", pos)),
-                         agg(bench_slice(df, "GOLD", pos)), spec),
-            )
-        )
+        benches = {t: agg(bench_slice(df, t, pos)) for t in tiers}
+        out.append(table(cmp_headers(tiers), cmp_rows(agg(sub), benches, spec)))
     return "\n".join(out)
 
 
@@ -235,7 +244,7 @@ def s_deaths(deaths: pd.DataFrame, me_metrics: pd.DataFrame) -> str:
     return "\n".join(out)
 
 
-def s_jungle(me: pd.DataFrame, df: pd.DataFrame) -> str:
+def s_jungle(me: pd.DataFrame, df: pd.DataFrame, tiers: list[str]) -> str:
     jg = me[me["is_jungle"] == 1]
     if jg.empty:
         return ""
@@ -263,10 +272,8 @@ def s_jungle(me: pd.DataFrame, df: pd.DataFrame) -> str:
         return out
 
     body = [f"정글 **{len(jg)}판** · 승률 **{pct(jg['win'].mean())}**\n"]
-    body.append(
-        table(["항목", "나", "SILVER 벤치", "GOLD 벤치"],
-              cmp_rows(jagg(jg), jagg(bench_slice(df, "SILVER")), jagg(bench_slice(df, "GOLD")), spec))
-    )
+    body.append(table(cmp_headers(tiers),
+                      cmp_rows(jagg(jg), {t: jagg(bench_slice(df, t)) for t in tiers}, spec)))
     body.append(
         "\n- 첫 갱 = 3분 이후 **라인(탑/미드/봇)** 에서 내가 딴 첫 킬/어시. "
         "정글·강에서 난 교전과 내 데스는 세지 않는다.\n"
@@ -317,7 +324,7 @@ def build(conn: sqlite3.Connection) -> str:
     n_my_remakes = int((remakes["p_is_me"] == 1).sum())
     metrics = metrics[metrics["duration_s"].fillna(0) >= config.REMAKE_MAX_S]
     me = metrics[metrics["p_is_me"] == 1].copy()
-    bench_tiers = sorted(
+    bench_tiers = sort_tiers(
         t for t in metrics[metrics["p_is_bench"] == 1]["p_tier"].dropna().unique()
     )
     bench_desc = [f"{t} {len(bench_slice(metrics, t))}판" for t in bench_tiers]
@@ -329,13 +336,13 @@ def build(conn: sqlite3.Connection) -> str:
         "\n## 1. 요약\n",
         s_summary(me, conn, bench_desc, n_my_remakes),
         "\n## 2. 라인별 지표 (벤치마크 비교)\n",
-        s_positions(me, metrics),
+        s_positions(me, metrics, bench_tiers),
         f"\n## 3. 챔피언별 ({MIN_CHAMP_GAMES}판 이상)\n",
         s_champions(me, static),
         "\n## 4. 데스 패턴\n",
         s_deaths(deaths, me),
     ]
-    jungle = s_jungle(me, metrics)
+    jungle = s_jungle(me, metrics, bench_tiers)
     if jungle:
         parts += ["\n## 5. 정글 전용\n", jungle]
     parts += [

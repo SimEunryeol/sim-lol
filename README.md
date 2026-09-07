@@ -53,7 +53,7 @@ python -m sim_diamond.report            # 3) data/report_YYYYMMDD.md
 ```bash
 python -m sim_diamond.collect_me --limit 20          # 매치 수 제한(첫 시험용)
 python -m sim_diamond.collect_me --recompute         # 지표 전체 재계산
-python -m sim_diamond.collect_bench --tiers SILVER GOLD PLATINUM --per-tier 15 --per-player 10
+python -m sim_diamond.collect_bench --tiers BRONZE SILVER GOLD --per-tier 15 --per-player 10
 python -m sim_diamond.report --out data/여기에.md
 ```
 
@@ -137,6 +137,9 @@ tests/              합성 픽스처 + 전 구간 자체 검증
   타지 않으므로 스크립트를 몇 번 다시 돌려도 안전하고, 중간에 끊겨도 이어서 진행된다.
 - **재생성 가능**: 파싱 테이블과 지표는 raw 만 보고 언제든 다시 만들 수 있다.
   `parse.reparse_all(conn)` / `metrics.compute_all(conn, recompute=True)`.
+
+벤치 비교 열은 **수집한 티어만큼 자동으로 생긴다**. 순서는 알파벳이 아니라 실력 순
+(IRON→CHALLENGER)이므로 `--tiers` 를 아무 순서로 줘도 리포트는 낮은 티어부터 나온다.
 
 ## DB 스키마
 
