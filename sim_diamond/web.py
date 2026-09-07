@@ -75,7 +75,8 @@ def _me(conn):
     return row
 
 
-def _recent(conn, puuid: str, static: Static, limit: int = 10) -> list[dict]:
+def _recent(conn, puuid: str, static: Static, limit: int = 10,
+            phase_start_ts: int = 0) -> list[dict]:
     matches = rate.recent_matches(conn, puuid, limit)
     check = _task_check(conn, [m["match_id"] for m in matches], puuid)
     out = []
@@ -93,6 +94,8 @@ def _recent(conn, puuid: str, static: Static, limit: int = 10) -> list[dict]:
             "score": m["score"],
             "memo": m["memo"],
             "task": check.get(m["match_id"]),
+            # 탐색 단계 시작 이후의 판만 적합도에 들어간다
+            "in_phase": bool(start and start >= phase_start_ts),
         })
     return out
 
@@ -154,15 +157,16 @@ def today():
         static = Static(conn)
         me = _me(conn)
         summary = explore.summarize(conn)
-        recent = _recent(conn, me["puuid"], static, 10)
         memo = coach.latest_memo(conn)
 
         cur = None
         if summary:
             cur = next((r for r in summary["reports"] if r["is_current"]), None)
         start_ts = cur["start_ts"] if cur else 0
-        # 단계 시작 이후 경기 중 아직 재미 점수가 없는 것 — 30초 루틴이 밀린 판이다.
-        unrated = [m for m in recent if m["game_start"] >= start_ts and m["score"] is None]
+        recent = _recent(conn, me["puuid"], static, 10, start_ts)
+        # 재미 점수는 적합도의 30% 다. 안 남기면 라인 비교가 반쪽이 된다.
+        unrated = [m for m in recent if m["in_phase"] and m["score"] is None]
+        unrated_any = [m for m in recent if m["score"] is None]
 
         return _clean({
             "riot_id": f"{me['game_name']}#{me['tag_line']}",
@@ -187,6 +191,8 @@ def today():
             "memo_detail": (memo["memo"] if memo else None),
             "recent": recent,
             "unrated": unrated,
+            "unrated_any": len(unrated_any),
+            "fun_weight": 0.30,
             "champ_ko": _ko_map(static),
             # 나중에 Data Dragon CDN 주소를 만들 때 쓴다. 없으면 화면은 플레이스홀더로 둔다.
             "ddragon_version": static.version,
