@@ -239,5 +239,16 @@ def main(argv: list[str] | None = None) -> int:
     return 0
 
 
+def cli(argv: list[str] | None = None) -> int:
+    try:
+        return main(argv)
+    except RiotError as exc:
+        print(exc.report())
+        return 1
+    except KeyboardInterrupt:
+        print("\n중단했습니다. 같은 명령을 다시 실행하면 받은 데이터부터 이어서 진행합니다.")
+        return 130
+
+
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(cli())

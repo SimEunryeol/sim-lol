@@ -18,12 +18,38 @@ from . import config
 from .db import now_iso
 
 
+STATUS_HINTS = {
+    401: "API 키가 거부됐습니다. 개발용 키는 24시간마다 만료됩니다 — "
+         "developer.riotgames.com 에서 새 키를 받아 .env 에 넣으세요.",
+    403: "API 키가 만료됐거나 잘못됐습니다 — developer.riotgames.com 에서 새 키를 받으세요.",
+    404: "찾을 수 없습니다. .env 의 RIOT_ID / RIOT_TAG 를 확인하세요.",
+    429: "요청이 너무 잦습니다. 잠시 뒤 다시 실행하면 캐시된 데이터부터 이어서 진행합니다.",
+    503: "라이엇 서버가 일시적으로 응답하지 않습니다. 잠시 뒤 다시 실행하세요.",
+}
+
+
 class RiotError(RuntimeError):
     def __init__(self, status: int, url: str, body: str):
         super().__init__(f"HTTP {status} {url} :: {body[:400]}")
         self.status = status
         self.url = url
         self.body = body
+
+    @property
+    def hint(self) -> str:
+        return STATUS_HINTS.get(self.status, "예상 밖 응답입니다. 위 본문을 그대로 공유해 주세요.")
+
+    def report(self) -> str:
+        return (
+            f"\n{'=' * 66}\n"
+            f"라이엇 API 요청이 실패했습니다.\n"
+            f"  요청 : {self.url}\n"
+            f"  응답 : HTTP {self.status}\n"
+            f"  본문 : {self.body[:300]}\n\n"
+            f"  {self.hint}\n\n"
+            f"  자세히 보려면: python -m sim_diamond.doctor\n"
+            f"{'=' * 66}"
+        )
 
 
 class NotFound(RiotError):

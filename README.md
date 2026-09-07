@@ -45,7 +45,8 @@ python -m sim_diamond.report            # 3) data/report_YYYYMMDD.md
 ```
 
 `scripts/` 에 같은 명령의 얇은 래퍼가 있다 — Windows 는 `.bat`(`setup.bat`, `collect_me.bat`,
-`collect_bench.bat`, `report.bat`, `selftest.bat`), macOS/Linux 는 `.sh`(`run_all.sh` 로 한 번에).
+`collect_bench.bat`, `report.bat`, `selftest.bat`, `doctor.bat`), macOS/Linux 는 `.sh`
+(`run_all.sh` 로 한 번에).
 
 자주 쓰는 인자
 
@@ -55,6 +56,16 @@ python -m sim_diamond.collect_me --recompute         # 지표 전체 재계산
 python -m sim_diamond.collect_bench --tiers SILVER GOLD PLATINUM --per-tier 15 --per-player 10
 python -m sim_diamond.report --out data/여기에.md
 ```
+
+## 잘 안 될 때: 진단부터
+
+```bat
+python -m sim_diamond.doctor        REM Windows: scripts\doctor.bat
+```
+
+`.env` 를 어디서 찾았는지, 키를 어떤 형식으로 읽었는지(전체는 절대 출력하지 않는다),
+그리고 라이엇이 **실제로** 어떤 상태코드와 본문을 돌려주는지 그대로 보여준다.
+`HTTP 401 / 403` 은 거의 항상 **개발용 키 만료**다 — 24시간마다 새로 발급받아야 한다.
 
 ## 네트워크 없이 검증
 
