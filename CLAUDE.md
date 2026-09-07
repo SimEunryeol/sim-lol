@@ -84,8 +84,7 @@ git pull
 `.env.example.bak` 에 원본이 남으니 `.env` 에 키가 없으면 거기서 복사한다.
 `.env` 와 `data/sim.db` 는 `.gitignore` 대상이라 안전하다.
 
-**그리고 라이엇 API 키가 채팅 스크린샷으로 노출됐다.** developer.riotgames.com 에서
-`새로운 API 키`로 재발급하고 `.env` 를 갱신하라고 사용자에게 알려라.
+라이엇 키는 사용자가 현재 것을 그대로 쓰기로 했다. 재발급을 권하지 마라.
 
 ---
 
@@ -232,7 +231,7 @@ r2500 에서만 잡히는 걸 검증한다.
 
 ## 8. 다음에 할 일 (순서대로)
 
-1. **git pull 막힘 해결** (2장) + 라이엇 키 재발급
+1. **git pull 막힘 해결** (2장)
 2. `python -m sim_diamond.phase init-explore ...` 재실행 — 지금 DB 의 단계는 구버전이라
    `role_order` 가 없다. 탐색 0판이라 잃을 게 없다.
 3. **코치 메모 첫 실행** — `.env` 에 `ANTHROPIC_API_KEY` 추가 후
