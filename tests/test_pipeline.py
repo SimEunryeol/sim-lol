@@ -253,6 +253,19 @@ def main() -> int:
         phase.add_phase(conn, "탐색", "JUNGLE", ["LeeSin"], 15, "2026-01-01")
         conn.commit()
 
+        # 탐색 순서(탑→미드→원딜→서폿→정글): 탑이 15판을 못 채웠는데 정글을 하면 순서 위반
+        by_r = {r["role"]: r for r in summ["reports"]}
+        check("탐색 순서대로 정렬", [r["role"] for r in summ["reports"]] == phase.ROLE_ORDER,
+              str([r["role"] for r in summ["reports"]]))
+        check("현재 탐색 라인 = 탑(3/15)", summ["current_role"] == "TOP"
+              and summ["current_left"] == 12, f"{summ['current_role']} {summ['current_left']}")
+        check("정글 11판은 전부 순서 위반", by_r["JUNGLE"]["order_violations"] == 11,
+              str(by_r["JUNGLE"]["order_violations"]))
+        check("탑은 순서 위반 아님", by_r["TOP"]["order_violations"] == 0,
+              str(by_r["TOP"]["order_violations"]))
+        check("순서 위반도 진행 판수에는 포함", by_r["JUNGLE"]["games"] == 11,
+              str(by_r["JUNGLE"]["games"]))
+
         # 단계 시작 시각을 뒤로 밀면 그 이전 경기는 탐색에서 빠져야 한다
         mid = conn.execute("SELECT game_start FROM participant_metrics WHERE puuid=? "
                            "AND team_position='JUNGLE' ORDER BY game_start", (ME,)).fetchall()
@@ -295,6 +308,18 @@ def main() -> int:
         check("메모 없는 리포트도 만들 수 있음(코치 입력용)",
               "테스트 메모 본문" not in report.build(conn, include_memo=False))
         check("코치 프롬프트에 75판 규칙 명시", "75판" in coach.SYSTEM_PROMPT)
+        check("코치 프롬프트 존댓말 강제 + 예시",
+              "존댓말" in coach.SYSTEM_PROMPT and "제어 와드를 1개 사세요" in coach.SYSTEM_PROMPT)
+        check("코치 프롬프트 과제 1개 강제", "**딱 하나만**" in coach.SYSTEM_PROMPT)
+        check("코치 프롬프트 우선순위 2·3은 다음 주 이후",
+              "다음 주 이후 후보" in coach.SYSTEM_PROMPT)
+        check("코치 프롬프트 분량 상한 900자",
+              coach.MAX_CHARS == 900 and "900자 이내" in coach.SYSTEM_PROMPT)
+        check("코치 프롬프트 현재 라인 명시 요구", "지금 탐색 중인 라인" in coach.SYSTEM_PROMPT)
+        content = coach.build_user_content("(리포트)", explore.summarize(conn))
+        check("사용자 입력에 현재 라인·남은 판수 주입",
+              "지금 탐색 중인 라인" in content and "라인 추천 금지" in content,
+              content.split("---- 리포트")[0][-200:])
         check("코치 프롬프트에 추정 지표 주의", "_(추정)_" in coach.SYSTEM_PROMPT)
         check("코치 프롬프트에 탐색 진행 현황 항목", "탐색 단계 진행 현황" in coach.SYSTEM_PROMPT)
         print(f"  리포트 {len(text.encode('utf-8'))} bytes → {args.report}")

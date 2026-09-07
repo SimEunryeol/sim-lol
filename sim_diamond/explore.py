@@ -22,7 +22,7 @@ import pandas as pd
 
 from . import config
 from .db import session
-from .phase import ROLE_KO, ROLES, active_phase
+from .phase import ROLE_KO, ROLE_ORDER, active_phase
 
 # (컬럼, 라벨, 소수 자릿수). 방향은 BRONZE/GOLD 벤치의 대소가 알아서 알려준다.
 FIT_METRICS = [
@@ -75,15 +75,49 @@ def _progress(mine: float, lo: float, hi: float) -> float | None:
     return max(0.0, min(1.0, (mine - lo) / spread))
 
 
-def role_report(me: pd.DataFrame, bench: pd.DataFrame, phase: dict) -> dict:
-    role = phase["role"]
-    champs = set(json.loads(phase["champs"]))
-    since = phase_start_ms(phase)
+def walk(me: pd.DataFrame, phases: list[dict]) -> dict:
+    """탐색 경기를 시간 순으로 훑으며 라인별 진행/위반을 센다.
 
-    # 단계 시작 시각 이후 경기만 본다. 그 전 경기는 탐색이 아니다(진단 리포트에는 그대로 남는다).
-    played = me[(me["team_position"] == role) & (me["game_start"] >= since)]
-    on_champ = played[played["champion_name"].isin(champs)] if champs else played
-    off_champ = played[~played["champion_name"].isin(champs)] if champs else played.iloc[0:0]
+    순서 위반은 "그 경기를 한 시점의 현재 라인"과 비교해 판정해야 한다.
+    나중에 앞 라인을 다 채웠다고 해서 과거의 순서 위반이 없던 일이 되지는 않는다.
+    """
+    by_role = {p["role"]: p for p in phases}
+    order = sorted(by_role, key=lambda r: by_role[r].get("role_order") if
+                   by_role[r].get("role_order") is not None else 99)
+    champs = {r: set(json.loads(by_role[r]["champs"])) for r in order}
+    target = {r: by_role[r]["target_games"] for r in order}
+    counts = {r: 0 for r in order}
+    champ_bad = {r: [] for r in order}
+    order_bad = {r: 0 for r in order}
+    total_after_start = {r: 0 for r in order}
+    kept: dict[str, list[int]] = {r: [] for r in order}
+
+    def current_of(c: dict) -> str | None:
+        return next((r for r in order if c[r] < target[r]), None)
+
+    games = me[me["team_position"].isin(order)].sort_values("game_start")
+    for row in games.itertuples():
+        role = row.team_position
+        if (row.game_start or 0) < phase_start_ms(by_role[role]):
+            continue
+        total_after_start[role] += 1
+        if champs[role] and row.champion_name not in champs[role]:
+            champ_bad[role].append(row.champion_name)
+            continue
+        if role != current_of(counts):
+            order_bad[role] += 1      # 기록은 하되 진행 판수에는 넣는다
+        counts[role] += 1
+        kept[role].append(row.Index)
+
+    return {"order": order, "counts": counts, "target": target,
+            "champ_bad": champ_bad, "order_bad": order_bad,
+            "total_after_start": total_after_start, "kept": kept,
+            "current": current_of(counts)}
+
+
+def role_report(me: pd.DataFrame, bench: pd.DataFrame, phase: dict, w: dict) -> dict:
+    role = phase["role"]
+    on_champ = me.loc[w["kept"][role]]
 
     def slice_of(tier: str) -> pd.DataFrame:
         return bench[(bench["p_tier"] == tier) & (bench["team_position"] == role)]
@@ -99,7 +133,6 @@ def role_report(me: pd.DataFrame, bench: pd.DataFrame, phase: dict) -> dict:
 
     lo_tier, lo_df = pick(LOWER_ANCHORS)
     hi_tier, hi_df = pick(UPPER_ANCHORS, exclude=lo_tier)
-    b = {"lower": lo_df, "upper": hi_df}
     rows, scores = [], []
     for col, label, digits in FIT_METRICS:
         mine = on_champ[col].mean() if len(on_champ) else float("nan")
@@ -115,17 +148,23 @@ def role_report(me: pd.DataFrame, bench: pd.DataFrame, phase: dict) -> dict:
     fun_avg = float(fun_vals.mean()) if len(fun_vals) else None
     fun_norm = (fun_avg - 1) / 4 if fun_avg is not None else None
     metric_score = sum(scores) / len(scores) if scores else None
-
     fit = None
     if metric_score is not None:
         fit = METRIC_WEIGHT * metric_score + FUN_WEIGHT * (fun_norm if fun_norm is not None else 0.5)
 
+    target = w["target"][role]
+    games = w["counts"][role]
     return {
-        "role": role, "champs": sorted(champs), "target": phase["target_games"],
-        "start_date": phase["start_date"], "start_ts": since,
-        # 진행 판수 = 기준 챔프로 한 경기만. 나머지는 위반으로 따로 센다.
-        "games": len(on_champ), "played_total": len(played), "violations": len(off_champ),
-        "violation_champs": sorted(set(off_champ["champion_name"].dropna())),
+        "role": role, "champs": sorted(json.loads(phase["champs"])),
+        "role_order": phase.get("role_order"),
+        "target": target, "start_date": phase["start_date"],
+        "start_ts": phase_start_ms(phase),
+        "games": games, "left": max(0, target - games),
+        "played_total": w["total_after_start"][role],
+        "violations": len(w["champ_bad"][role]),
+        "violation_champs": sorted(set(c for c in w["champ_bad"][role] if c)),
+        "order_violations": w["order_bad"][role],
+        "is_current": role == w["current"],
         "winrate": on_champ["win"].mean() if len(on_champ) else None,
         "rows": rows, "metric_score": metric_score,
         "fun_avg": fun_avg, "fun_rated": int(len(fun_vals)), "fit": fit,
@@ -140,16 +179,23 @@ def summarize(conn, phase_name: str | None = None) -> dict | None:
     if not phases:
         return None
     me, bench = load(conn)
-    order = {r: i for i, r in enumerate(ROLES)}
-    reports = sorted((role_report(me, bench, p) for p in phases),
-                     key=lambda r: order.get(r["role"], 99))
+    w = walk(me, phases)
+    by_role = {p["role"]: p for p in phases}
+    reports = [role_report(me, bench, by_role[r], w) for r in w["order"]]
     done = sum(min(r["games"], r["target"]) for r in reports)
     target = sum(r["target"] for r in reports)
+    cur = next((r for r in reports if r["is_current"]), None)
     return {
         "phase_name": phases[0]["phase_name"],
         "start_date": min(p["start_date"] for p in phases),
         "reports": reports, "done": done, "target": target,
         "complete": done >= target,
+        "order": w["order"],
+        "current_role": w["current"],
+        "current_left": cur["left"] if cur else 0,
+        "current_games": cur["games"] if cur else 0,
+        "current_champs": cur["champs"] if cur else [],
+        "order_violations": sum(r["order_violations"] for r in reports),
     }
 
 
@@ -164,20 +210,34 @@ def _pctf(v) -> str:
     return "—" if v is None or pd.isna(v) else f"{v * 100:.0f}%"
 
 
+def current_line(summary: dict) -> str:
+    if not summary or not summary.get("current_role"):
+        return "탐색 완료"
+    r = summary["current_role"]
+    return (f"{ROLE_KO.get(r, r)} ({summary['current_games']}/"
+            f"{summary['current_games'] + summary['current_left']}판, "
+            f"{summary['current_left']}판 남음) · 기준 챔프 "
+            f"{', '.join(summary['current_champs']) or '미지정'}")
+
+
 def render_markdown(summary: dict) -> str:
     if not summary:
         return ("_등록된 탐색 단계가 없습니다._ `python -m sim_diamond.phase init-explore` 로 "
                 "5개 라인 탐색 단계를 만들 수 있다.\n")
+    order_txt = " → ".join(ROLE_KO.get(r, r) for r in summary["order"])
     out = [f"단계 **{summary['phase_name']}** (시작 {summary['start_date']}) · "
            f"진행 **{summary['done']}/{summary['target']}판** "
-           f"({summary['done'] / max(1, summary['target']):.0%})\n"]
+           f"({summary['done'] / max(1, summary['target']):.0%})\n",
+           f"**지금 탐색 중인 라인: {current_line(summary)}**\n",
+           f"탐색 순서: {order_txt}\n"]
     rows = []
     for r in summary["reports"]:
         rows.append([
-            ROLE_KO.get(r["role"], r["role"]),
+            ROLE_KO.get(r["role"], r["role"]) + (" ◀ 지금" if r["is_current"] else ""),
             f"{r['games']}/{r['target']}",
             str(r["violations"]) + (f" ({', '.join(r['violation_champs'][:3])})"
                                     if r["violation_champs"] else ""),
+            str(r["order_violations"]) if r["order_violations"] else "0",
             _pctf(r["winrate"]),
             _f(r["fun_avg"], 1) + (f" ({r['fun_rated']}판)" if r["fun_rated"] else ""),
             _pctf(r["metric_score"]),
@@ -185,12 +245,14 @@ def render_markdown(summary: dict) -> str:
         ])
     anchors = next((f"{r['lower_tier']}→{r['upper_tier']}" for r in summary["reports"]
                     if r["lower_tier"] and r["upper_tier"]), "벤치 없음")
-    out.append(f"| 라인 | 진행 | 기준 챔프 외 | 승률 | 재미 | 지표({anchors}) | 적합도 |")
-    out.append("| --- | --- | --- | --- | --- | --- | --- |")
+    out.append(f"| 라인 | 진행 | 기준 챔프 외 | 순서 위반 | 승률 | 재미 | 지표({anchors}) | 적합도 |")
+    out.append("| --- | --- | --- | --- | --- | --- | --- | --- |")
     out += ["| " + " | ".join(r) + " |" for r in rows]
     out.append("")
     out.append("- 진행 판수는 **단계 시작 시각 이후 · 기준 챔프로 한 경기**만 센다. "
                "그 전 경기와 기준 챔프 밖 경기는 위 숫자에 안 들어간다(진단 리포트에는 그대로 남는다).")
+    out.append("- **순서 위반** = 앞 라인이 목표를 채우기 전에 뒤 라인을 한 판수. "
+               "진행에는 넣되 따로 표시한다.")
     if summary["complete"]:
         out.append("- 목표 판수를 채웠다. 이제 라인별 적합도를 비교해 결정할 수 있다.")
     else:
@@ -213,15 +275,20 @@ def print_console(summary: dict) -> None:
     print(f"탐색 단계 '{summary['phase_name']}' · 시작 {summary['start_date']} · "
           f"진행 {summary['done']}/{summary['target']}판 "
           f"({summary['done'] / max(1, summary['target']):.0%})")
+    print(f"지금 탐색 중: {current_line(summary)}")
+    print(f"탐색 순서: {' → '.join(ROLE_KO.get(r, r) for r in summary['order'])}")
     print("진행 판수 = 단계 시작 시각 이후 · 기준 챔프로 한 경기만")
-    print("=" * 76)
-    print(f"{'라인':<6}{'진행':>8}{'위반':>6}{'승률':>7}{'재미':>7}{'지표':>7}{'적합도':>8}  기준 챔프")
-    print("-" * 76)
+    print("=" * 82)
+    print(f"{'라인':<9}{'진행':>8}{'챔프위반':>9}{'순서위반':>9}{'승률':>7}"
+          f"{'재미':>7}{'지표':>7}{'적합도':>8}  기준 챔프")
+    print("-" * 82)
     for r in summary["reports"]:
         champs = ", ".join(r["champs"]) or "미지정"
-        print(f"{ROLE_KO.get(r['role'], r['role']):<6}"
+        name = ROLE_KO.get(r["role"], r["role"]) + (" ◀지금" if r["is_current"] else "")
+        print(f"{name:<9}"
               f"{r['games']:>4}/{r['target']:<3}"
-              f"{r['violations']:>6}"
+              f"{r['violations']:>9}"
+              f"{r['order_violations']:>9}"
               f"{_pctf(r['winrate']):>7}"
               f"{_f(r['fun_avg'], 1):>7}"
               f"{_pctf(r['metric_score']):>7}"
@@ -231,7 +298,8 @@ def print_console(summary: dict) -> None:
         if not r["games"]:
             continue
         print(f"\n[{ROLE_KO.get(r['role'], r['role'])}] 기준 챔프 {r['games']}판 "
-              f"/ 그 외 {r['violations']}판 (단계 시작 후 총 {r['played_total']}판)"
+              f"/ 챔프 위반 {r['violations']}판 / 순서 위반 {r['order_violations']}판 "
+              f"(단계 시작 후 총 {r['played_total']}판)"
               + (f"  ! 벤치 표본 부족 {r['bench_games']}" if r["low_bench"] else ""))
         if r["violation_champs"]:
             print(f"  기준 챔프 외: {', '.join(r['violation_champs'])}")
@@ -244,6 +312,9 @@ def print_console(summary: dict) -> None:
                   f"{prog:>8}")
 
     print()
+    if summary["order_violations"]:
+        print(f"순서 위반이 {summary['order_violations']}판 있습니다 — "
+              f"앞 라인을 먼저 채우고 넘어가세요.")
     if summary["complete"]:
         print("목표 판수를 채웠습니다. 라인별 적합도를 비교해 결정할 수 있습니다.")
     else:

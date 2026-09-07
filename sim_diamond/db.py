@@ -149,6 +149,7 @@ CREATE TABLE IF NOT EXISTS phases (
     role        TEXT NOT NULL,   -- TOP / JUNGLE / MIDDLE / BOTTOM / UTILITY
     champs      TEXT NOT NULL,   -- json 배열: 기준 챔프 이름(영문 championName)
     target_games INTEGER NOT NULL DEFAULT 15,
+    role_order  INTEGER,         -- 탐색 순서. 작을수록 먼저 한다
     end_date    TEXT,
     created_at  TEXT,
     PRIMARY KEY (phase_name, role)
@@ -296,6 +297,8 @@ def _migrate_phases(conn: sqlite3.Connection) -> None:
     have = {r["name"] for r in conn.execute("PRAGMA table_info(phases)")}
     if "start_ts" not in have:
         conn.execute("ALTER TABLE phases ADD COLUMN start_ts INTEGER")
+    if "role_order" not in have:
+        conn.execute("ALTER TABLE phases ADD COLUMN role_order INTEGER")
     conn.execute("""
         UPDATE phases SET start_ts = CAST(
             (julianday(start_date || ' 00:00:00') - julianday('1970-01-01')) * 86400000 - 32400000

@@ -18,6 +18,8 @@ from .db import now_iso, session, upsert
 from .ddragon import Static
 
 ROLES = ["TOP", "JUNGLE", "MIDDLE", "BOTTOM", "UTILITY"]
+# 탐색 순서. 앞 라인 목표를 채운 뒤 다음 라인으로 넘어간다.
+ROLE_ORDER = ["TOP", "MIDDLE", "BOTTOM", "UTILITY", "JUNGLE"]
 ROLE_KO = {"TOP": "탑", "JUNGLE": "정글", "MIDDLE": "미드", "BOTTOM": "원딜", "UTILITY": "서폿"}
 EXPLORE_NAME = "탐색"
 EXPLORE_TARGET = 15          # 라인당 목표 판수
@@ -29,7 +31,8 @@ def today_kst() -> str:
 
 
 def add_phase(conn, name: str, role: str, champs: list[str], target: int,
-              start: str, start_ts: int | None = None) -> None:
+              start: str, start_ts: int | None = None,
+              role_order: int | None = None) -> None:
     """start_ts 는 epoch ms. 안 주면 start_date 00:00 KST 로 잡는다.
 
     init-explore 는 '실행한 그 시각'을 넘긴다 — 그 전에 한 경기는 탐색이 아니기 때문이다.
@@ -37,10 +40,13 @@ def add_phase(conn, name: str, role: str, champs: list[str], target: int,
     if start_ts is None:
         start_ts = int(datetime.strptime(start, "%Y-%m-%d")
                        .replace(tzinfo=config.KST).timestamp() * 1000)
+    role = role.upper()
+    if role_order is None:
+        role_order = ROLE_ORDER.index(role) if role in ROLE_ORDER else 99
     upsert(conn, "phases", {
-        "phase_name": name, "start_date": start, "start_ts": start_ts, "role": role.upper(),
+        "phase_name": name, "start_date": start, "start_ts": start_ts, "role": role,
         "champs": json.dumps(champs, ensure_ascii=False), "target_games": target,
-        "end_date": None, "created_at": now_iso(),
+        "role_order": role_order, "end_date": None, "created_at": now_iso(),
     }, ["phase_name", "role"])
 
 
@@ -50,7 +56,7 @@ def list_phases(conn, name: str | None = None) -> list[dict]:
     if name:
         sql += " WHERE phase_name = ?"
         args = (name,)
-    sql += " ORDER BY start_date, role"
+    sql += " ORDER BY COALESCE(role_order, 99), role"
     return [dict(r) for r in conn.execute(sql, args)]
 
 
@@ -71,14 +77,15 @@ def _print(conn, static: Static) -> None:
     if not rows:
         print("등록된 단계가 없습니다. `python -m sim_diamond.phase init-explore` 로 시작하세요.")
         return
-    print(f"{'단계':<8} {'라인':<6} {'시작 시각(KST)':<17} {'목표':>4}  기준 챔프")
+    print(f"{'순서':<4} {'단계':<8} {'라인':<6} {'시작 시각(KST)':<17} {'목표':>4}  기준 챔프")
     print("-" * 78)
     for p in rows:
         champs = ", ".join(json.loads(p["champs"]))
         end = f"  (종료 {p['end_date']})" if p["end_date"] else ""
         started = datetime.fromtimestamp((p["start_ts"] or 0) / 1000,
                                          config.KST).strftime("%Y-%m-%d %H:%M")
-        print(f"{p['phase_name']:<8} {ROLE_KO.get(p['role'], p['role']):<6} "
+        print(f"{(p['role_order'] if p['role_order'] is not None else 9) + 1:<4} "
+              f"{p['phase_name']:<8} {ROLE_KO.get(p['role'], p['role']):<6} "
               f"{started:<17} {p['target_games']:>4}  {champs}{end}")
 
 
@@ -121,14 +128,16 @@ def main(argv: list[str] | None = None) -> int:
             start = args.start or today_kst()
             # --start 를 명시하면 그 날 00:00 KST 부터, 아니면 지금 이 순간부터 센다.
             start_ts = None if args.start else int(now.timestamp() * 1000)
-            for role in ROLES:
+            for order, role in enumerate(ROLE_ORDER):
                 champs = getattr(args, role.lower()) or []
-                add_phase(conn, args.name, role, champs, args.games, start, start_ts)
+                add_phase(conn, args.name, role, champs, args.games, start, start_ts, order)
             conn.commit()
             when = args.start or f"{now:%Y-%m-%d %H:%M} KST(지금)"
             print(f"'{args.name}' 단계를 {when} 이후로 5개 라인에 만들었습니다 "
                   f"(라인당 {args.games}판, 총 {args.games * len(ROLES)}판).")
             print("  이 시각 이전 경기와 기준 챔프가 아닌 경기는 탐색 진행 판수에 안 들어갑니다.")
+            print(f"  탐색 순서: {' → '.join(ROLE_KO[r] for r in ROLE_ORDER)}")
+            print("  앞 라인 목표를 채우기 전에 다음 라인을 하면 '순서 위반'으로 표시됩니다.")
             empty = [ROLE_KO[r] for r in ROLES if not getattr(args, r.lower())]
             if empty:
                 print(f"  ! 기준 챔프를 아직 안 정한 라인: {', '.join(empty)}")

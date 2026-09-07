@@ -495,9 +495,13 @@ def compute_all(
         if recompute:
             sql = "SELECT match_id FROM matches"
         else:
+            # 매치 단위로 "지표 있음"을 판정하면, 한 매치에 추적 대상(내 계정/벤치)이
+            # 2명 이상일 때 두 번째부터 영영 계산되지 않는다. 인원수로 비교한다.
             sql = (
-                "SELECT m.match_id FROM matches m "
-                "WHERE NOT EXISTS (SELECT 1 FROM participant_metrics pm WHERE pm.match_id = m.match_id)"
+                "SELECT m.match_id FROM matches m WHERE "
+                "(SELECT COUNT(*) FROM participants p JOIN players pl ON pl.puuid = p.puuid "
+                " WHERE p.match_id = m.match_id) > "
+                "(SELECT COUNT(*) FROM participant_metrics pm WHERE pm.match_id = m.match_id)"
             )
         match_ids = [r["match_id"] for r in conn.execute(sql)]
     match_ids = list(match_ids)
