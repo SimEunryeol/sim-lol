@@ -332,6 +332,9 @@ def session(db_path: str | Path) -> Iterator[sqlite3.Connection]:
     conn = connect(db_path)
     try:
         init_db(conn)
+        # 캐시된 옛 원본 JSON 을 읽을 때 옛 puuid 를 새 puuid 로 옮기기 위한 표
+        from . import parse
+        parse.load_alias(conn)
         yield conn
         conn.commit()
     finally:

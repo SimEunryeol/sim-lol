@@ -2,6 +2,7 @@
 .env.local
 *.bak
 data/*.db
+data/sim.db.bak*
 data/*.db-journal
 data/*.db-wal
 data/*.db-shm

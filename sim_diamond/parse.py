@@ -15,6 +15,28 @@ _SKIP_EXTRA = {
 }
 
 
+# 라이엇이 계정의 puuid 를 한 번 바꿨다(2026-09 초). 새로 받는 JSON 은 새 puuid 로
+# 오지만 `matches_raw` 에 이미 받아둔 옛 사본은 옛 puuid 그대로다. 원본은 버리지
+# 않는 게 원칙이라(9장), 읽을 때 옛→새로 옮겨 준다. `puuid_alias` 표가 비어 있으면
+# 아무 일도 하지 않는다.
+_ALIAS: dict[str, str] | None = None
+
+
+def load_alias(conn: sqlite3.Connection) -> dict[str, str]:
+    global _ALIAS
+    conn.execute("CREATE TABLE IF NOT EXISTS puuid_alias ("
+                 "old_puuid TEXT PRIMARY KEY, new_puuid TEXT NOT NULL, note TEXT)")
+    _ALIAS = {r[0]: r[1] for r in conn.execute(
+        "SELECT old_puuid, new_puuid FROM puuid_alias")}
+    return _ALIAS
+
+
+def alias(puuid: str | None) -> str | None:
+    if puuid is None or not _ALIAS:
+        return puuid
+    return _ALIAS.get(puuid, puuid)
+
+
 def puuid_map(timeline: dict) -> dict[int, str]:
     """participantId(1..10) → puuid"""
     meta = timeline.get("metadata") or {}
@@ -23,7 +45,7 @@ def puuid_map(timeline: dict) -> dict[int, str]:
     if not out:  # 구형/변형 응답 대비
         for p in (timeline.get("info") or {}).get("participants") or []:
             if "participantId" in p and "puuid" in p:
-                out[int(p["participantId"])] = p["puuid"]
+                out[int(p["participantId"])] = alias(p["puuid"])
     return out
 
 
@@ -52,7 +74,7 @@ def parse_match(raw: dict) -> tuple[dict, list[dict]]:
         participants.append(
             {
                 "match_id": match_id,
-                "puuid": p.get("puuid"),
+                "puuid": alias(p.get("puuid")),
                 "participant_id": p.get("participantId"),
                 "team_id": p.get("teamId"),
                 "champion_id": p.get("championId"),
