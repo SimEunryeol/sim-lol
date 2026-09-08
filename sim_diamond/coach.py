@@ -19,13 +19,65 @@ from .db import now_iso, session, upsert
 DEFAULT_MODEL = "claude-opus-5"
 MAX_TOKENS = 16000
 
-MAX_CHARS = 900
+# 라인전 진단이 한 절 늘어서 900 → 1100. SPEC.md 의 분량 문구도 같이 고쳤다.
+MAX_CHARS = 1100
 
 # 이번 주 과제는 사용자가 SPEC.md 에서 직접 정한다. 코치가 매주 데이터를 보고 새로
 # 고르게 두면 주마다 과제가 바뀌어 "한 번에 하나만 고친다"는 원칙이 깨진다. 실제로
 # 첫 실행에서 코치가 SPEC 과 다른 목표치(판당 2개 → 산 판 비율 87%)를 만들어냈다.
 # 과제를 바꿀 때는 SPEC.md 와 이 상수를 함께 고쳐라.
 WEEKLY_TASK = "제어 와드를 매 귀환마다 1개씩 사서, 판당 2개 이상 유지하세요."
+
+# 이번 주 과제를 "무슨 숫자로 확인하는가". SPEC.md 가 요구하는 세 요소 중 뒤 둘이다.
+# 코치 메모 본문에서 숫자를 긁어오지 않는다 — 문장이 조금만 바뀌어도 조용히 깨진다.
+# 과제를 바꾸면 coach.WEEKLY_TASK 와 여기를 같이 고쳐라.
+WEEKLY_TASK_METRICS = [
+    {"label": "제어 와드 산 판 비율", "col": "control_ward_rate", "pct": True,
+     "target": 0.70, "bench_tier": "GOLD"},
+    {"label": "판당 제어 와드", "col": "control_wards", "pct": False,
+     "target": 2.0, "bench_tier": "GOLD"},
+]
+
+
+# 판 하나가 과제를 지켰는지 판정하는 기준. 과제를 바꾸면 여기도 같이 고쳐라.
+WEEKLY_TASK_CHECK = {"column": "control_wards_bought", "label": "제어 와드",
+                     "unit": "개", "min": 2}
+
+
+def task_check(conn, match_ids: list[str], puuid: str) -> dict[str, dict]:
+    """경기별로 이번 주 과제를 지켰는지. 30초 루틴에서 바로 보이라고 만든다."""
+    if not match_ids:
+        return {}
+    col = WEEKLY_TASK_CHECK["column"]
+    q = ",".join("?" * len(match_ids))
+    rows = conn.execute(
+        f"SELECT match_id, {col} AS v FROM participant_metrics "
+        f"WHERE puuid = ? AND match_id IN ({q})", [puuid, *match_ids]).fetchall()
+    out = {}
+    for r in rows:
+        v = r["v"]
+        out[r["match_id"]] = {"value": v,
+                              "ok": (v is not None and v >= WEEKLY_TASK_CHECK["min"])}
+    return out
+
+
+def task_targets(conn, position: str | None) -> list[dict]:
+    """이번 주 과제의 '지금 값 → 목표'. 지금 탐색 중인 라인 기준으로 센다."""
+    metrics, _ = report.load(conn)
+    metrics = metrics[metrics["duration_s"].fillna(0) >= config.REMAKE_MAX_S]
+    me = metrics[metrics["p_is_me"] == 1]
+    if position:
+        me = me[me["team_position"] == position]
+    if me.empty:
+        return []
+    mine = report.agg(me)
+    out = []
+    for m in WEEKLY_TASK_METRICS:
+        bench = report.agg(report.bench_slice(metrics, m["bench_tier"], position))
+        out.append({**m, "now": mine.get(m["col"]), "bench": bench.get(m["col"]),
+                    "games": int(len(me)), "position": position})
+    return out
+
 
 SYSTEM_PROMPT = """당신은 한국 리그 오브 레전드 코치입니다. 상대는 KR 서버 BRONZE III 의
 심은렬이고, 목표는 다이아몬드입니다. 아래 진단 리포트는 그의 솔로랭크 전적과 같은 서버
@@ -35,6 +87,11 @@ BRONZE/SILVER/GOLD 표본을 같은 방식으로 계산해 나란히 놓은 것�
 주 라인을 확정하지 않았습니다. 5개 라인을 정해진 순서로 하나씩, 각 라인마다 기준 챔프
 2개로 15판씩, 총 75판을 돌려보며 어디가 맞는지 데이터로 고르는 "탐색 단계"입니다.
 지금 어느 라인을 하고 있고 몇 판 남았는지는 리포트의 "탐색 단계 진행 현황"에 있습니다.
+
+솔로랭크는 라인을 두 개 걸어야 해서 원하는 라인만 골라 할 수 없습니다. **부라인이
+걸리면 그 라인의 기준 챔프로 하면 그 라인 진행 판수에 쌓입니다**(순서 위반으로
+표시되지만 집계에는 들어갑니다). "탑에서만 하세요"라고 하지 말고, 부라인이 걸렸을
+때 무엇을 고르라고 알려 주세요.
 
 ## 반드시 지킬 것
 
@@ -70,23 +127,46 @@ BRONZE/SILVER/GOLD 표본을 같은 방식으로 계산해 나란히 놓은 것�
 **이번 주 과제** — 사용자 입력의 "[이번 주 과제]" 블록에 있는 과제를 씁니다.
 **새로 고르거나 다른 것으로 바꾸지 마세요.** **딱 하나만** 씁니다. 반드시 포함할 것:
 - 무엇을 할지 (정해진 과제를 한 문장, 존댓말로)
-- **측정 가능한 목표치** (예: "제어 와드를 산 판 비율을 38.6% → 70% 이상으로")
+- **측정 가능한 목표치** — 사용자 입력의 "[이번 주 과제]" 아래에 목표 수치가
+  주어집니다. **그 숫자를 그대로 쓰세요.** 화면에도 같은 숫자가 떠 있어서 다른
+  값을 쓰면 어긋납니다.
 - 다음 리포트에서 이 숫자로 확인하겠다는 명시
 
-**우선순위 (진단)** — 데이터로 본 문제 3개를 순서대로. 각각 두 문장 이내로,
-내 수치 vs 벤치 수치를 붙여서. 1번은 위 "이번 주 과제"와 같은 항목입니다.
-**2번과 3번에는 "다음 주 이후 후보"라고 명시하세요.** 지금 손대지 않습니다.
+**라인전** — 리포트 4번(라인전) 표에서 **지금 탐색 중인 라인**만 봅니다.
+15분 이전 데스와 10·15분 CS·골드 차이를 벤치와 비교해 한 문장으로 짚고,
+그 숫자를 만드는 상황과 **구체적으로 무엇을 다르게 할지**를 한두 문장 씁니다.
+죽은 위치가 리포트에 있으면 그것도 근거로 쓰세요.
+여기서는 롤 지식으로 조언해도 됩니다 — 단, **진단의 근거 숫자는 반드시 리포트의
+것**이어야 하고, 웨이브가 밀렸는지 당겨졌는지 같은 **측정하지 않은 것을 사실처럼
+말하지 마세요**(리플레이가 없어 잴 수 없습니다).
+
+**우선순위 (진단)** — 데이터로 본 문제 2개. 각각 두 문장 이내로, 내 수치 vs 벤치
+수치를 붙여서. 1번은 위 "이번 주 과제"와 같은 항목입니다.
+**2번에는 "다음 주 이후 후보"라고 명시하세요.** 지금 손대지 않습니다.
 
 **주의** — 데이터로 말할 수 없는 것, 표본이 부족해 판단을 미룬 것을 솔직히 적으세요.
 
 ## 분량
 
-**전체 900자 이내(공백 포함).** 넘기지 마세요. 표를 쓰지 마세요. 서론·인사말 없이
+**전체 1100자 이내(공백 포함).** 넘기지 마세요. 표를 쓰지 마세요. 서론·인사말 없이
 바로 본문으로 시작하세요. 짧게 쓰기 위해 근거 수치를 빼지는 마세요 — 대신 설명을
 줄이세요."""
 
 
-def build_user_content(report_md: str, summary: dict | None) -> str:
+def target_lines(conn, position: str | None) -> list[str]:
+    """'지금 값 → 목표' 를 문장으로. 화면과 코치가 같은 숫자를 쓰게 하려는 것이다."""
+    out = []
+    for m in task_targets(conn, position):
+        f = (lambda v: "—" if v is None else
+             (f"{v * 100:.1f}%" if m["pct"] else f"{v:.2f}"))
+        where = f"{position} {m['games']}판 기준" if position else "전체"
+        out.append(f"{m['label']}: 지금 {f(m['now'])} → 목표 {f(m['target'])} "
+                   f"({where}, {m['bench_tier']} 벤치 {f(m['bench'])})")
+    return out
+
+
+def build_user_content(report_md: str, summary: dict | None,
+                       targets: list[str] | None = None) -> str:
     """리포트 전문 + 탐색 상태를 구조화해 넘긴다.
 
     탐색 상태는 리포트 안에도 있지만, 규칙(라인 추천 금지·현재 라인 명시)이 걸린
@@ -117,7 +197,9 @@ def build_user_content(report_md: str, summary: dict | None) -> str:
     # 규칙 8번의 근거. 코치가 과제를 새로 고르지 못하게 값으로 못박는다.
     task = (
         "[이번 주 과제 — 사용자가 이미 정했습니다. 새로 고르지 마세요]\n"
-        f"- {WEEKLY_TASK}\n\n"
+        f"- {WEEKLY_TASK}\n"
+        + "".join(f"- 목표: {m}\n" for m in (targets or []))
+        + "\n"
     )
     return (
         "아래는 오늘 생성된 진단 리포트 전문입니다. 이걸 근거로 코치 메모를 써 주세요.\n"
@@ -131,7 +213,7 @@ def build_user_content(report_md: str, summary: dict | None) -> str:
 
 
 def generate(report_md: str, summary: dict | None, model: str,
-             api_key: str) -> tuple[str, int, int]:
+             api_key: str, targets: list[str] | None = None) -> tuple[str, int, int]:
     try:
         import anthropic
     except ImportError:
@@ -139,7 +221,7 @@ def generate(report_md: str, summary: dict | None, model: str,
             "anthropic 패키지가 없습니다. 설치하세요:\n  pip install -r requirements.txt"
         )
     client = anthropic.Anthropic(api_key=api_key)
-    user_content = build_user_content(report_md, summary)
+    user_content = build_user_content(report_md, summary, targets)
     with client.messages.stream(
         model=model,
         max_tokens=MAX_TOKENS,
@@ -194,9 +276,11 @@ def main(argv: list[str] | None = None) -> int:
         # 메모 없는 상태의 리포트를 먼저 만들어 그걸 입력으로 준다
         report_md = report.build(conn, include_memo=False)
         summary = explore.summarize(conn)
+        # 목표 수치는 화면과 같은 값을 써야 한다 — 코치가 새로 만들면 어긋난다
+        targets = target_lines(conn, summary["current_role"] if summary else None)
 
         if args.dry_run:
-            content = build_user_content(report_md, summary)
+            content = build_user_content(report_md, summary, targets)
             print("=" * 70)
             print("SYSTEM PROMPT")
             print("=" * 70)

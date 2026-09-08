@@ -385,6 +385,48 @@ def _unwarded_rate(d: pd.DataFrame) -> str:
     return pct((judged["warded"] == 0).sum() / len(judged)) if len(judged) else "—"
 
 
+ZONE_KO = {"TOP": "탑 라인", "MID": "미드 라인", "BOT": "봇 라인", "RIVER": "강",
+           "OWN_JUNGLE": "우리 정글", "ENEMY_JUNGLE": "적 정글", "OWN_BASE": "우리 기지",
+           "ENEMY_BASE": "적 기지", "BARON_PIT": "바론", "DRAGON_PIT": "드래곤"}
+
+
+def s_laning(me: pd.DataFrame, deaths: pd.DataFrame, df: pd.DataFrame,
+             tiers: list[str]) -> str:
+    """라인전(15분 이전)에서 무슨 일이 벌어지는지.
+
+    라이엇 타임라인에는 미니언이 없어서 웨이브가 밀렸는지 당겨졌는지는 잴 수 없다.
+    대신 잴 수 있는 것 — 15분 이전에 몇 번 어디서 죽었는가, 그때 CS·골드·레벨이
+    얼마나 벌어졌는가 — 을 라인마다 벤치와 나란히 놓는다.
+    """
+    if me.empty:
+        return "_데이터 없음_\n"
+    out = ["라인전에서 벌어지는 일만 따로 본다. 15분 이전 데스와 그때의 격차다.\n"]
+    spec = [("deaths_before_15", "15분 이전 데스", lambda v: fmt(v, 2)),
+            ("cs10_diff", "10분 CS 차이", lambda v: fmt(v, 1, plus=True)),
+            ("gold10_diff", "10분 골드 차이", lambda v: fmt(v, 0, plus=True)),
+            ("cs15_diff", "15분 CS 차이", lambda v: fmt(v, 1, plus=True)),
+            ("gold15_diff", "15분 골드 차이", lambda v: fmt(v, 0, plus=True)),
+            ("level15_diff", "15분 레벨 차이", lambda v: fmt(v, 2, plus=True)),
+            ("first_core_item_min", "첫 코어템(분)", lambda v: fmt(v, 1))]
+    for pos in POSITION_ORDER:
+        sub = me[me["team_position"] == pos]
+        if sub.empty:
+            continue
+        small = SMALL if len(sub) < MIN_POSITION_GAMES else ""
+        out.append(f"\n**{POSITION_KO[pos]} — {len(sub)}판{small}**\n")
+        benches = {t: agg(bench_slice(df, t, pos)) for t in tiers}
+        counts = {t: len(bench_slice(df, t, pos)) for t in tiers}
+        out.append(table(cmp_headers(tiers, counts), cmp_rows(agg(sub), benches, spec)))
+        # 어디서 죽었나 — 라인에서 죽는 것과 남의 구역에서 죽는 것은 다른 문제다
+        mine = deaths[(deaths["p_is_me"] == 1) & (deaths["team_position"] == pos)
+                      & (deaths["minute"] < 15)]
+        if len(mine):
+            top = Counter(mine["zone"].dropna()).most_common(4)
+            spots = " · ".join(f"{ZONE_KO.get(z, z)} {n}회" for z, n in top)
+            out.append(f"15분 이전 데스 {len(mine)}회의 위치: {spots}\n")
+    return "".join(out)
+
+
 def s_trend(me: pd.DataFrame) -> str:
     if me.empty or me["game_start"].isna().all():
         return "_데이터 없음_\n"
@@ -466,13 +508,15 @@ def build(conn: sqlite3.Connection, include_memo: bool = True) -> str:
         s_positions(me, metrics, bench_tiers),
         f"\n## 3. 챔피언별 ({MIN_CHAMP_GAMES}판 이상)\n",
         s_champions(me, static, mastery),
-        "\n## 4. 데스 패턴\n",
+        "\n## 4. 라인전 (15분 이전)\n",
+        s_laning(me, deaths, metrics, bench_tiers),
+        "\n## 5. 데스 패턴\n",
         s_deaths(deaths, me, metrics, bench_tiers),
-        "\n## 5. 탐색 단계 진행 현황\n",
+        "\n## 6. 탐색 단계 진행 현황\n",
         explore.render_markdown(explore_summary),
-        "\n## 6. 시간 흐름 (월별)\n",
+        "\n## 7. 시간 흐름 (월별)\n",
         s_trend(me),
-        "\n## 7. 코치 메모\n",
+        "\n## 8. 코치 메모\n",
         s_coach(conn) if include_memo else "> (생성 중)\n",
         "\n---\n\n### 계산 방식 주석\n",
         s_notes(static),

@@ -17,7 +17,9 @@
 from __future__ import annotations
 
 import argparse
+import io
 import math
+from contextlib import redirect_stdout
 from datetime import datetime
 from pathlib import Path
 
@@ -27,6 +29,7 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
 from . import coach, config, explore, rate, report
+from .coach import WEEKLY_TASK_CHECK, WEEKLY_TASK_METRICS
 from .db import now_iso, session, upsert
 from .ddragon import Static
 
@@ -78,7 +81,7 @@ def _me(conn):
 def _recent(conn, puuid: str, static: Static, limit: int = 10,
             phase_start_ts: int = 0) -> list[dict]:
     matches = rate.recent_matches(conn, puuid, limit)
-    check = _task_check(conn, [m["match_id"] for m in matches], puuid)
+    check = coach.task_check(conn, [m["match_id"] for m in matches], puuid)
     out = []
     for m in matches:
         start = m["game_start"] or 0
@@ -97,57 +100,6 @@ def _recent(conn, puuid: str, static: Static, limit: int = 10,
             # 탐색 단계 시작 이후의 판만 적합도에 들어간다
             "in_phase": bool(start and start >= phase_start_ts),
         })
-    return out
-
-
-# 이번 주 과제를 "무슨 숫자로 확인하는가". SPEC.md 가 요구하는 세 요소 중 뒤 둘이다.
-# 코치 메모 본문에서 숫자를 긁어오지 않는다 — 문장이 조금만 바뀌어도 조용히 깨진다.
-# 과제를 바꾸면 coach.WEEKLY_TASK 와 여기를 같이 고쳐라.
-WEEKLY_TASK_METRICS = [
-    {"label": "제어 와드 산 판 비율", "col": "control_ward_rate", "pct": True,
-     "target": 0.70, "bench_tier": "GOLD"},
-    {"label": "판당 제어 와드", "col": "control_wards", "pct": False,
-     "target": 2.0, "bench_tier": "GOLD"},
-]
-
-
-# 판 하나가 과제를 지켰는지 판정하는 기준. 과제를 바꾸면 여기도 같이 고쳐라.
-WEEKLY_TASK_CHECK = {"column": "control_wards_bought", "label": "제어 와드",
-                     "unit": "개", "min": 2}
-
-
-def _task_check(conn, match_ids: list[str], puuid: str) -> dict[str, dict]:
-    """경기별로 이번 주 과제를 지켰는지. 30초 루틴에서 바로 보이라고 만든다."""
-    if not match_ids:
-        return {}
-    col = WEEKLY_TASK_CHECK["column"]
-    q = ",".join("?" * len(match_ids))
-    rows = conn.execute(
-        f"SELECT match_id, {col} AS v FROM participant_metrics "
-        f"WHERE puuid = ? AND match_id IN ({q})", [puuid, *match_ids]).fetchall()
-    out = {}
-    for r in rows:
-        v = r["v"]
-        out[r["match_id"]] = {"value": v,
-                              "ok": (v is not None and v >= WEEKLY_TASK_CHECK["min"])}
-    return out
-
-
-def _task_targets(conn, position: str | None) -> list[dict]:
-    """이번 주 과제의 '지금 값 → 목표'. 지금 탐색 중인 라인 기준으로 센다."""
-    metrics, _ = report.load(conn)
-    metrics = metrics[metrics["duration_s"].fillna(0) >= config.REMAKE_MAX_S]
-    me = metrics[metrics["p_is_me"] == 1]
-    if position:
-        me = me[me["team_position"] == position]
-    if me.empty:
-        return []
-    mine = report.agg(me)
-    out = []
-    for m in WEEKLY_TASK_METRICS:
-        bench = report.agg(report.bench_slice(metrics, m["bench_tier"], position))
-        out.append({**m, "now": mine.get(m["col"]), "bench": bench.get(m["col"]),
-                    "games": int(len(me)), "position": position})
     return out
 
 
@@ -184,8 +136,11 @@ def today():
                 "complete": summary["complete"] if summary else False,
             } if summary else None,
             "weekly_task": coach.WEEKLY_TASK,
-            "task_targets": _task_targets(conn, summary["current_role"] if summary else None),
+            "task_targets": coach.task_targets(conn, summary["current_role"] if summary else None),
             "task_check": {**WEEKLY_TASK_CHECK},
+            # 부라인이 걸렸을 때 뭘 골라야 하는지 화면이 보여준다
+            "all_champs": ({r["role"]: r["champs"] for r in summary["reports"]}
+                           if summary else {}),
             "memo_headline": (memo["memo"].strip().splitlines()[0] if memo else None),
             # 화면이 '이번 주 과제' 절만 떼어 쓴다 (목표 수치가 거기 들어 있다)
             "memo_detail": (memo["memo"] if memo else None),
@@ -321,6 +276,34 @@ def rate_match(body: RateIn):
         conn.commit()
         return {"match_id": target["match_id"], "score": body.score,
                 "memo": body.memo, "was": target["score"]}
+
+
+@app.post("/collect")
+def collect():
+    """새 경기를 라이엇에서 받아온다. 판 끝나고 버튼 한 번으로 끝내라고 만든다.
+
+    collect_me 의 CLI 를 그대로 부른다 — 수집 규칙이 두 벌이 되면 반드시 어긋난다.
+    """
+    from . import collect_me
+    before = _counts()
+    buf = io.StringIO()
+    try:
+        with redirect_stdout(buf):
+            code = collect_me.main(["--limit", "20", "--no-replays-probe"])
+    except SystemExit as e:            # doctor 안내 등으로 빠져나오는 경우
+        code = int(e.code or 1)
+    except Exception as e:             # 네트워크·키 문제는 화면에 그대로 보여준다
+        raise HTTPException(502, f"수집 실패: {e}") from e
+    after = _counts()
+    return {"ok": code == 0, "new_matches": after["matches"] - before["matches"],
+            "new_metrics": after["participant_metrics"] - before["participant_metrics"],
+            "log": buf.getvalue()[-1500:]}
+
+
+def _counts() -> dict[str, int]:
+    with session(_db()) as conn:
+        return {t: conn.execute(f"SELECT COUNT(*) FROM {t}").fetchone()[0]
+                for t in ("matches", "participant_metrics")}
 
 
 @app.get("/")

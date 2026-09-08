@@ -283,8 +283,9 @@ def main() -> int:
         Path(args.report).parent.mkdir(parents=True, exist_ok=True)
         Path(args.report).write_text(text, encoding="utf-8")
         for heading in ("# 심은렬 다이아만들기 — 첫 진단 리포트", "## 1. 요약",
-                        "## 2. 라인별 지표", "## 3. 챔피언별", "## 4. 데스 패턴",
-                        "## 5. 탐색 단계 진행 현황", "## 6. 시간 흐름", "## 7. 코치 메모"):
+                        "## 2. 라인별 지표", "## 3. 챔피언별", "## 4. 라인전 (15분 이전)",
+                        "## 5. 데스 패턴", "## 6. 탐색 단계 진행 현황",
+                        "## 7. 시간 흐름", "## 8. 코치 메모"):
             check(f"섹션 {heading[:22]}", heading in text)
         for lane in ("### 탑", "### 정글", "### 미드", "### 원딜", "### 서폿"):
             check(f"라인 섹션 {lane}", lane in text)
@@ -298,6 +299,8 @@ def main() -> int:
         check("벤치 SILVER 열", "SILVER 벤치" in text)
         check("벤치 GOLD 열", "GOLD 벤치" in text)
         check("한글 챔피언 이름", "리 신" in text)
+        check("라인전 섹션에 15분 이전 데스 행", "15분 이전 데스" in text)
+        check("라인전 섹션에 죽은 위치", "15분 이전 데스" in text and "위치:" in text)
         check("코치 메모 미생성 안내", "python -m sim_diamond.coach" in text)
         # 메모가 저장되면 리포트 7번에 실제로 실린다
         from sim_diamond import coach  # noqa: E402
@@ -311,10 +314,10 @@ def main() -> int:
         check("코치 프롬프트 존댓말 강제 + 예시",
               "존댓말" in coach.SYSTEM_PROMPT and "제어 와드를 1개 사세요" in coach.SYSTEM_PROMPT)
         check("코치 프롬프트 과제 1개 강제", "**딱 하나만**" in coach.SYSTEM_PROMPT)
-        check("코치 프롬프트 우선순위 2·3은 다음 주 이후",
+        check("코치 프롬프트 우선순위 2번은 다음 주 이후",
               "다음 주 이후 후보" in coach.SYSTEM_PROMPT)
-        check("코치 프롬프트 분량 상한 900자",
-              coach.MAX_CHARS == 900 and "900자 이내" in coach.SYSTEM_PROMPT)
+        check("코치 프롬프트 분량 상한 1100자",
+              coach.MAX_CHARS == 1100 and "1100자 이내" in coach.SYSTEM_PROMPT)
         check("코치 프롬프트 현재 라인 명시 요구", "지금 탐색 중인 라인" in coach.SYSTEM_PROMPT)
         content = coach.build_user_content("(리포트)", explore.summarize(conn))
         check("사용자 입력에 현재 라인·남은 판수 주입",
@@ -326,6 +329,9 @@ def main() -> int:
         check("코치 프롬프트가 과제 임의 변경을 금지",
               "새로 고르거나 다른 것으로 바꾸지 마세요" in coach.SYSTEM_PROMPT
               and "과제를 바꾸지" in coach.SYSTEM_PROMPT)
+        check("코치 프롬프트에 라인전 절",
+              "**라인전**" in coach.SYSTEM_PROMPT
+              and "측정하지 않은 것을 사실처럼" in coach.SYSTEM_PROMPT)
         check("코치 프롬프트에 추정 지표 주의", "_(추정)_" in coach.SYSTEM_PROMPT)
         check("코치 프롬프트에 탐색 진행 현황 항목", "탐색 단계 진행 현황" in coach.SYSTEM_PROMPT)
 
